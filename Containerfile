@@ -4,7 +4,7 @@ COPY build_files /
 COPY system_files /system_files
 
 # Base Image
-FROM quay.io/fedora/fedora-bootc:44
+FROM quay.io/fedora/fedora-bootc:46@sha256:882df9f568ba54b5706e8ef097d452b7913ba1bfd9129f2256bfb69606f6a388
 
 # [IM]MUTABLE /opt
 RUN rm -rf /opt && mkdir /opt
