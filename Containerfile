@@ -7,7 +7,7 @@ COPY system_files /system_files
 FROM quay.io/fedora/fedora-bootc:44
 
 # [IM]MUTABLE /opt
-RUN rm -rf /opt && ln -s /var/opt /opt
+RUN rm -rf /opt && mkdir /opt
 
 # Pinned k0s version (note the "+k0s.N" suffix used in k0s release tags)
 ARG K0S_VERSION=v1.34.1+k0s.0
