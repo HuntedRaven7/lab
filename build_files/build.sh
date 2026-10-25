@@ -17,24 +17,15 @@ gpgkey=https://pkgs.netbird.io/yum/repodata/repomd.xml.key
 repo_gpgcheck=1
 EOF
 
-# Ublue stack
-dnf5 -y copr enable ublue-os/packages
-dnf5 -y copr enable ublue-os/staging
-
+dnf5 -y install 'dnf5-command(copr)'
 dnf5 -y install dnf-plugins-core
-
-dnf5 -y install \
-    ublue-os-luks \
-    ublue-os-signing \
-    ublue-os-udev-rules \
-    ublue-os-update-services \
-    fedora-repos-archive \
-    zstd
 
 # Fedora stack
 dnf5 install -y tmux \
+	git \
 	netbird \
 	firewalld \
+        zstd \
 	fwupd-efi \
         podman \
 	wireguard-tools \
@@ -45,10 +36,6 @@ dnf5 install -y tmux \
 	iwlegacy-firmware \
         iwlwifi-dvm-firmware \
         iwlwifi-mvm-firmware 
-
-# Disables the coprs
-dnf5 -y copr disable ublue-os/staging
-dnf5 -y copr disable ublue-os/packages
 
 # Service enablement 
 systemctl enable rpm-ostreed-automatic.timer
