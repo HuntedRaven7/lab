@@ -29,6 +29,7 @@ dnf5 install -y tmux \
         podman \
 	wireguard-tools \
 	NetworkManager-wifi \
+	container-selinux \
         atheros-firmware \
         brcmfmac-firmware \
 	realtek-firmware \
