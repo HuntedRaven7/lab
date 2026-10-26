@@ -1,7 +1,7 @@
 # Workstation image
 
 # Brew package manager
-FROM ghcr.io/ublue-os/brew:latest@sha256:e9a72571b7644b6277f0638b6a3c5e497e265e1098ab91224567acbdeb8b74ea AS brew
+FROM ghcr.io/ublue-os/brew:latest@sha256:c201bc801e4828849e8e36c4adcb5c0f38d35ac3ff9546a0ecab0fd2beabf51f AS brew
 
 # Allow build scripts to be referenced without being copied into the final image
 FROM scratch AS ctx
