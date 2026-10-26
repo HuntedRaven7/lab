@@ -23,7 +23,6 @@ dnf5 -y install dnf-plugins-core
 # Fedora stack
 dnf5 install -y tmux \
 	git \
-	netbird \
 	firewalld \
         zstd \
 	fwupd-efi \
@@ -36,6 +35,11 @@ dnf5 install -y tmux \
 	iwlegacy-firmware \
         iwlwifi-dvm-firmware \
         iwlwifi-mvm-firmware 
+
+# Netbird's %post runs systemctl daemon-reload which cannot work in a container build
+dnf5 -y install --setopt=tsflags=noscripts netbird
+netbird service install || true
+systemctl enable netbird.service
 
 # Service enablement 
 systemctl enable rpm-ostreed-automatic.timer

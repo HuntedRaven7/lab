@@ -93,38 +93,60 @@ sudoif command *args:
 #
 
 # Build the image using the specified parameters
+#
+# Image-specific settings are loaded from <image>.env (when present), and a
+# dedicated Containerfile.<image> is used if one exists.
 build $target_image=image_name $tag=default_tag:
     #!/usr/bin/env bash
 
     set -euox pipefail
 
+    # Load image-specific build parameters, overriding homelab.env
+    IMAGE_BASENAME="$(basename "${target_image}")"
+    ENV_FILE="${IMAGE_BASENAME}.env"
+    if [[ -f "${ENV_FILE}" ]]; then
+        set -a
+        source "${ENV_FILE}"
+        set +a
+    fi
+
+    # Use a dedicated Containerfile when one exists
+    CONTAINERFILE="Containerfile"
+    if [[ -f "Containerfile.${IMAGE_BASENAME}" ]]; then
+        CONTAINERFILE="Containerfile.${IMAGE_BASENAME}"
+    fi
+
     BUILD_ARGS=()
     LABELS=()
     if [[ -z "$(git status -s)" ]]; then
         GIT_SHA=$(git rev-parse --short HEAD)
-        LABELS+=("--label" "io.artifacthub.package.readme-url=https://raw.githubusercontent.com/{{ repo_organization }}/{{ image_name }}/${GIT_SHA}/README.md")
-        LABELS+=("--label" "org.opencontainers.image.documentation=https://raw.githubusercontent.com/{{ repo_organization }}/{{ image_name }}/${GIT_SHA}/README.md")
-        LABELS+=("--label" "org.opencontainers.image.source=https://github.com/{{ repo_organization }}/{{ image_name }}/blob/${GIT_SHA}/Containerfile")
-        LABELS+=("--label" "org.opencontainers.image.url=https://github.com/{{ repo_organization }}/{{ image_name }}/tree/${GIT_SHA}")
-        LABELS+=("--label" "org.opencontainers.image.version={{ default_tag }}.$(date +%Y%m%d)-${GIT_SHA}")
+        LABELS+=("--label" "io.artifacthub.package.readme-url=https://raw.githubusercontent.com/${REPO_ORGANIZATION}/${IMAGE_NAME}/${GIT_SHA}/README.md")
+        LABELS+=("--label" "org.opencontainers.image.documentation=https://raw.githubusercontent.com/${REPO_ORGANIZATION}/${IMAGE_NAME}/${GIT_SHA}/README.md")
+        LABELS+=("--label" "org.opencontainers.image.source=https://github.com/${REPO_ORGANIZATION}/${IMAGE_NAME}/blob/${GIT_SHA}/${CONTAINERFILE}")
+        LABELS+=("--label" "org.opencontainers.image.url=https://github.com/${REPO_ORGANIZATION}/${IMAGE_NAME}/tree/${GIT_SHA}")
+        LABELS+=("--label" "org.opencontainers.image.version=${DEFAULT_TAG}.$(date +%Y%m%d)-${GIT_SHA}")
     fi
 
     # Image metadata for https://artifacthub.io/ - This is optional but is highly recommended so we all can get a index of all the custom images
     # The metadata by itself is not going to do anything, you choose if you want your image to be on ArtifactHub or not.
     LABELS+=("--label" "io.artifacthub.package.deprecated=false")
-    LABELS+=("--label" "io.artifacthub.package.keywords={{ image_keywords }}")
+    LABELS+=("--label" "io.artifacthub.package.keywords=${IMAGE_KEYWORDS}")
     LABELS+=("--label" "io.artifacthub.package.license=Apache-2.0")
-    LABELS+=("--label" "io.artifacthub.package.logo-url={{ image_logo_url }}")
+    LABELS+=("--label" "io.artifacthub.package.logo-url=${IMAGE_LOGO_URL}")
     LABELS+=("--label" "io.artifacthub.package.prerelease=false")
     LABELS+=("--label" "org.opencontainers.image.created=$(date -u +%Y\-%m\-%d\T%H\:%M\:%S\Z)")
-    LABELS+=("--label" "org.opencontainers.image.description={{ image_desc }}")
-    LABELS+=("--label" "org.opencontainers.image.title={{ image_name }}")
-    LABELS+=("--label" "org.opencontainers.image.vendor={{ repo_organization }}")
+    LABELS+=("--label" "org.opencontainers.image.description=${IMAGE_DESC}")
+    LABELS+=("--label" "org.opencontainers.image.title=${IMAGE_NAME}")
+    LABELS+=("--label" "org.opencontainers.image.vendor=${REPO_ORGANIZATION}")
 
     # This actually builds the image!
-    PODMAN_BUILD_ARGS=("${BUILD_ARGS[@]}" "${LABELS[@]}" --pull=newer --tag "${target_image}:${tag}" --file Containerfile)
+    PODMAN_BUILD_ARGS=("${BUILD_ARGS[@]}" "${LABELS[@]}" --pull=newer --tag "${target_image}:${tag}" --file "${CONTAINERFILE}")
 
     podman build "${PODMAN_BUILD_ARGS[@]}" .
+
+# Build the workstation base image
+[group('Workstation')]
+build-workstation $tag=default_tag: (build "workstation" tag)
 
 # Split the image for smaller updates (New)!
 rechunk $target_image=image_name $tag=default_tag:
@@ -263,6 +285,10 @@ _rootful_load_image $target_image=image_name $tag=default_tag:
     #!/usr/bin/env bash
     set -eoux pipefail
 
+    if [[ "${target_image}" != */* ]]; then
+        target_image="localhost/${target_image}"
+    fi
+
     # Check if already running as root or under sudo
     if [[ -n "${SUDO_USER:-}" || "${UID}" -eq "0" ]]; then
         echo "Already root or running under sudo, no need to load image from user podman."
@@ -303,6 +329,10 @@ _rootful_load_image $target_image=image_name $tag=default_tag:
 _build-bib $target_image $tag $type $config: (_rootful_load_image target_image tag)
     #!/usr/bin/env bash
     set -euo pipefail
+
+    if [[ "${target_image}" != */* ]]; then
+        target_image="localhost/${target_image}"
+    fi
 
     args="--type ${type} "
     args+="--use-librepo=True "

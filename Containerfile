@@ -1,3 +1,5 @@
+# Homelab image
+
 # Allow build scripts to be referenced without being copied into the final image
 FROM scratch AS ctx
 COPY build_files /
@@ -20,13 +22,19 @@ RUN set -eux; \
       "https://github.com/k0sproject/k0s/releases/download/$(echo "${K0S_VERSION}" | sed 's/+/%2B/')/k0s-${K0S_VERSION}-${TARGETARCH}"; \
     chmod 0755 /opt/k0s/bin/k0s; 
 
-# MODIFICATIONS
+# UUPD
 RUN --mount=type=bind,from=ctx,source=/,target=/ctx \
     --mount=type=cache,dst=/var/cache \
     --mount=type=cache,dst=/var/log \
     --mount=type=tmpfs,dst=/tmp \
-    /ctx/uupd-build.sh \
-    /ctx/build.sh
+    /ctx/uupd-build.sh 
+
+# BUILD
+RUN --mount=type=bind,from=ctx,source=/,target=/ctx \
+    --mount=type=cache,dst=/var/cache \
+    --mount=type=cache,dst=/var/log \
+    --mount=type=tmpfs,dst=/tmp \
+    /ctx/build-homelab.sh
 
 # INIT
 CMD ["/sbin/init"]

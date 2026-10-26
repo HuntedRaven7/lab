@@ -1,0 +1,47 @@
+# Workstation image
+
+# Brew package manager
+FROM ghcr.io/ublue-os/brew:latest@sha256:e9a72571b7644b6277f0638b6a3c5e497e265e1098ab91224567acbdeb8b74ea AS brew
+
+# Allow build scripts to be referenced without being copied into the final image
+FROM scratch AS ctx
+COPY build_files /
+COPY system_files /system_files
+
+# Getting the brew in the image
+COPY --from=brew /system_files /oci/brew
+
+# Base image
+FROM quay.io/fedora/fedora-bootc:45
+
+# [IM]MUTABLE /opt
+RUN rm -rf /opt && mkdir /opt
+
+# MODIFICATIONS
+
+# UUPD
+RUN --mount=type=bind,from=ctx,source=/,target=/ctx \
+    --mount=type=cache,dst=/var/cache \
+    --mount=type=cache,dst=/var/log \
+    --mount=type=tmpfs,dst=/tmp \
+    /ctx/uupd-build.sh 
+
+# DESKTOP
+RUN --mount=type=bind,from=ctx,source=/,target=/ctx \
+    --mount=type=cache,dst=/var/cache \
+    --mount=type=cache,dst=/var/log \
+    --mount=type=tmpfs,dst=/tmp \
+    /ctx/build-workstation.sh 
+
+# NVIDIA
+RUN --mount=type=bind,from=ctx,source=/,target=/ctx \
+    --mount=type=cache,dst=/var/cache \
+    --mount=type=cache,dst=/var/log \
+    --mount=type=tmpfs,dst=/tmp \
+    /ctx/nvidia.sh
+
+# INIT
+CMD ["/sbin/init"]
+
+# LINTING
+RUN bootc container lint

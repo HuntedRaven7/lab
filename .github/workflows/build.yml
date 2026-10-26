@@ -16,19 +16,29 @@ on:
 env:
   IMAGE_REGISTRY: "ghcr.io/${{ github.repository_owner }}"  # do not edit
 
-concurrency:
-  group: ${{ github.workflow }}-${{ github.ref || github.run_id }}-${{ inputs.brand_name}}-${{ inputs.stream_name }}
-  cancel-in-progress: true
-
 jobs:
   build_push:
-    name: Build and push image
+    name: Build and push ${{ matrix.image }} image
     runs-on: ubuntu-26.04
 
     permissions:
       contents: read
       packages: write
       id-token: write
+
+    strategy:
+      fail-fast: false
+      matrix:
+        image:
+          - homelab
+          - workstation
+
+    env:
+      IMAGE_NAME: ${{ matrix.image }}
+
+    concurrency:
+      group: ${{ github.workflow }}-${{ github.ref || github.run_id }}-${{ matrix.image }}
+      cancel-in-progress: true
 
     steps:
       # These stage versions are pinned by https://github.com/renovatebot/renovate
@@ -45,13 +55,6 @@ jobs:
         shell: bash
         run: |
           just check
-
-      - name: Image Name
-        id: image-name
-        run: |
-          IMAGE_NAME=$(just image_name)
-
-          echo "IMAGE_NAME=${IMAGE_NAME}" >> $GITHUB_ENV
 
       - name: Default Tag
         id: gen-default-tag

@@ -4,6 +4,14 @@ name: Build disk images
 on:
   workflow_dispatch:
     inputs:
+      image:
+        description: "Image to build"
+        required: true
+        default: homelab
+        type: choice
+        options:
+          - homelab
+          - workstation
       upload-to-s3:
         description: "Upload to S3"
         required: false
@@ -24,7 +32,7 @@ on:
       - './.github/workflows/build-disk.yml'
 
 env:
-  IMAGE_NAME: ${{ github.event.repository.name }} # output of build.yml, keep in sync
+  IMAGE_NAME: ${{ inputs.image || 'homelab' }} # must match an image built by build.yml
   IMAGE_REGISTRY: "ghcr.io/${{ github.repository_owner }}"  # do not edit
   DEFAULT_TAG: "latest"
   BIB_IMAGE: "quay.io/centos-bootc/bootc-image-builder:latest"
@@ -35,7 +43,7 @@ concurrency:
 
 jobs:
   build:
-    name: Build disk images
+    name: Build ${{ inputs.image || 'homelab' }} disk images
     runs-on: ${{ inputs.platform == 'amd64' && 'ubuntu-26.04' || 'ubuntu-26.04-arm' }}
     strategy:
       fail-fast: false
