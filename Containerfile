@@ -15,12 +15,11 @@ RUN rm -rf /opt && mkdir /opt
 ARG K0S_VERSION=v1.34.1+k0s.0
 ARG TARGETARCH=amd64
  
-# Download the pinned k0s binary into /opt/k0s/bin
+# Download the pinned k0s binary into /usr/bin
 RUN set -eux; \
-    mkdir -p /opt/k0s/bin; \
-    curl -fsSL -o /opt/k0s/bin/k0s \
+    curl -fsSL -o /usr/bin/k0s \
       "https://github.com/k0sproject/k0s/releases/download/$(echo "${K0S_VERSION}" | sed 's/+/%2B/')/k0s-${K0S_VERSION}-${TARGETARCH}"; \
-    chmod 0755 /opt/k0s/bin/k0s; 
+    chmod 0755 /usr/bin/k0s
 
 # Laptop suspend off when lid closed 
 RUN systemctl mask sleep.target suspend.target hibernate.target hybrid-sleep.target suspend-then-hibernate.target && \

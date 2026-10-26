@@ -16,26 +16,45 @@ gpgkey=https://pkgs.netbird.io/yum/repodata/repomd.xml.key
 repo_gpgcheck=1
 EOF
 
+tee /etc/yum.repos.d/terra.repo <<EOF
+[terra]
+name=Terra $releasever
+# disable mirrors because they are very flakey
+baseurl=https://repos.fyralabs.com/terra$releasever
+# metalink=https://tetsudou.fyralabs.com/metalink?repo=terra$releasever&arch=$basearch
+metadata_expire=6h
+type=rpm
+gpgcheck=1
+gpgkey=https://repos.fyralabs.com/terra$releasever/key.asc
+repo_gpgcheck=1
+enabled=0
+enabled_metadata=1
+countme=1
+
+[terra-source]
+name=Terra $releasever - Source
+baseurl=https://repos.fyralabs.com/terra$releasever-source
+# metalink=https://tetsudou.fyralabs.com/metalink?repo=terra$releasever-source&arch=$basearch
+metadata_expire=6h
+type=rpm
+gpgcheck=1
+gpgkey=https://repos.fyralabs.com/terra$releasever/key.asc
+repo_gpgcheck=1
+enabled=0
+enabled_metadata=0
+EOF
+
 dnf5 -y install 'dnf5-command(copr)'
 dnf5 -y install dnf-plugins-core
 
-dnf5 -y install plasma-desktop
-
-# Prevent partial upgrading, major kde version updates black screened
-# https://github.com/ublue-os/aurora/issues/1227
-dnf versionlock add "qt6-*" "plasma-desktop"
-PLASMA_VERS=$(rpm -q --qf "%{VERSION}" plasma-desktop)
-
-# Fedora stack
+# Fedora/Terra stack
 dnf5 install -y git-credential-libsecret \
 	flatpak-spawn \
+	ghostty \
 	gum \
+	mangowm \
 	alsa-firmware \
 	just \
-        plasma-firewall-"${PLASMA_VERS}" \
-	plasma-union-"${PLASMA_VERS}" \
-	plasma-wallpapers-dynamic-builder \
-	apr{,-util} \
 	autofs \
 	borgbackup \
 	distrobox \
@@ -55,6 +74,13 @@ dnf5 install -y git-credential-libsecret \
 	ffmpeg \
 	ffmpegthumbnailer \
 	alsa-firmware \
+
+# This is only for quickshell I hate hyprland
+dnf5 -y copr enable lionheartp/Hyprland
+
+dnf5 -y install quickshell
+
+dnf5 -y copr disable lionheartp/Hyprland
 
 # Netbird's %post runs systemctl daemon-reload which cannot work in a container build
 dnf5 -y install --setopt=tsflags=noscripts netbird
