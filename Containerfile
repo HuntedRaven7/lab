@@ -22,6 +22,12 @@ RUN set -eux; \
       "https://github.com/k0sproject/k0s/releases/download/$(echo "${K0S_VERSION}" | sed 's/+/%2B/')/k0s-${K0S_VERSION}-${TARGETARCH}"; \
     chmod 0755 /opt/k0s/bin/k0s; 
 
+# Laptop suspend off when lid closed 
+RUN systemctl mask sleep.target suspend.target hibernate.target hybrid-sleep.target suspend-then-hibernate.target && \
+    mkdir -p /usr/lib/systemd/logind.conf.d && \
+    printf '[Login]\nHandleLidSwitch=ignore\nHandleLidSwitchExternalPower=ignore\nHandleLidSwitchDocked=ignore\nHandleSuspendKey=ignore\nHandleHibernateKey=ignore\nIdleAction=ignore\n' \
+      > /usr/lib/systemd/logind.conf.d/50-no-suspend.conf
+
 # UUPD
 RUN --mount=type=bind,from=ctx,source=/,target=/ctx \
     --mount=type=cache,dst=/var/cache \
