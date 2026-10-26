@@ -23,9 +23,9 @@ RUN set -eux; \
 
 # Laptop suspend off when lid closed 
 RUN systemctl mask sleep.target suspend.target hibernate.target hybrid-sleep.target suspend-then-hibernate.target && \
-    mkdir -p /usr/lib/systemd/logind.conf.d && \
+    mkdir -p /etc/systemd/logind.conf.d && \
     printf '[Login]\nHandleLidSwitch=ignore\nHandleLidSwitchExternalPower=ignore\nHandleLidSwitchDocked=ignore\nHandleSuspendKey=ignore\nHandleHibernateKey=ignore\nIdleAction=ignore\n' \
-      > /usr/lib/systemd/logind.conf.d/50-no-suspend.conf
+      > /etc/systemd/logind.conf.d/50-no-suspend.conf
 
 # UUPD
 RUN --mount=type=bind,from=ctx,source=/,target=/ctx \
