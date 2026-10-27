@@ -11,15 +11,21 @@ FROM quay.io/fedora/fedora-bootc:44
 # [IM]MUTABLE /opt
 RUN rm -rf /opt && mkdir /opt
 
-# Pinned k0s version (note the "+k0s.N" suffix used in k0s release tags)
-ARG K0S_VERSION=v1.34.1+k0s.0
+# Pinned k3s version (note the "+k3sN" suffix used in k3s release tags)
+ARG K3S_VERSION=v1.34.1+k3s1
 ARG TARGETARCH=amd64
- 
-# Download the pinned k0s binary into /usr/bin
+
+# Download the pinned k3s binary into /usr/bin
 RUN set -eux; \
-    curl -fsSL -o /usr/bin/k0s \
-      "https://github.com/k0sproject/k0s/releases/download/$(echo "${K0S_VERSION}" | sed 's/+/%2B/')/k0s-${K0S_VERSION}-${TARGETARCH}"; \
-    chmod 0755 /usr/bin/k0s
+    case "${TARGETARCH}" in \
+      amd64) K3S_BIN="k3s" ;; \
+      arm64) K3S_BIN="k3s-arm64" ;; \
+      arm)   K3S_BIN="k3s-armhf" ;; \
+      *) echo "unsupported arch: ${TARGETARCH}" >&2; exit 1 ;; \
+    esac; \
+    curl -fsSL -o /usr/bin/k3s \
+      "https://github.com/k3s-io/k3s/releases/download/$(echo "${K3S_VERSION}" | sed 's/+/%2B/')/${K3S_BIN}"; \
+    chmod 0755 /usr/bin/k3s
 
 # Laptop suspend off when lid closed 
 RUN systemctl mask sleep.target suspend.target hibernate.target hybrid-sleep.target suspend-then-hibernate.target && \

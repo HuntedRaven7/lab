@@ -6,6 +6,20 @@
 
   "rebaseWhen": "never",
 
+  "customManagers": [
+    {
+      "customType": "regex",
+      "description": "Track the pinned k3s version in Containerfiles",
+      "managerFilePatterns": ["/(^|/)Containerfile(\\..+)?$/"],
+      "matchStrings": [
+        "ARG K3S_VERSION=(?<currentValue>v\\S+)"
+      ],
+      "depNameTemplate": "k3s-io/k3s",
+      "datasourceTemplate": "github-releases",
+      "versioningTemplate": "regex:^v(?<major>\\d+)\\.(?<minor>\\d+)\\.(?<patch>\\d+)(?<compatibility>\\+k3s)(?<build>\\d+)$"
+    }
+  ],
+
   "packageRules": [
     {
       "automerge": true,
