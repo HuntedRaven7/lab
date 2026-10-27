@@ -12,7 +12,7 @@ FROM quay.io/fedora/fedora-bootc:44
 RUN rm -rf /opt && mkdir /opt
 
 # Pinned k3s version (note the "+k3sN" suffix used in k3s release tags)
-ARG K3S_VERSION=v1.34.1+k3s1
+ARG K3S_VERSION=v1.37.1+k3s1
 ARG TARGETARCH=amd64
 
 # Download the pinned k3s binary into /usr/bin
