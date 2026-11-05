@@ -4,7 +4,7 @@ After=local-fs.target
 
 [Container]
 Pod=vaultwarden.pod
-Image=docker.io/library/caddy:2.11.2-alpine@sha256:834468128c7696cec0ceea6172f7d692daf645ae51983ca76e39da54a97c570d
+Image=docker.io/library/caddy:2.11.8-alpine@sha256:f6228111e5fafa1a5238258d0858e103f10599b8d1659a146e7726681a002bb9
 AutoUpdate=registry
 Volume=/etc/homelab/caddy/Caddyfile:/etc/caddy/Caddyfile:ro,Z
 Volume=caddy-data:/data:Z
