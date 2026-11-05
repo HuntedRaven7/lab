@@ -1,0 +1,18 @@
+# Homelab node 0 (Podman quadlets) - consumes base homelab image
+ARG BASE_IMAGE=ghcr.io/huntedraven7/homelab:latest
+
+FROM scratch AS ctx
+COPY build_files /
+COPY system_files/homelab-0/ /system_files
+COPY repos/ /repos
+
+FROM ${BASE_IMAGE}
+
+RUN --mount=type=bind,from=ctx,source=/,target=/ctx \
+    --mount=type=cache,dst=/var/cache \
+    --mount=type=cache,dst=/var/log \
+    --mount=type=tmpfs,dst=/tmp \
+    /ctx/build-homelab-node.sh 0
+
+CMD ["/sbin/init"]
+RUN bootc container lint

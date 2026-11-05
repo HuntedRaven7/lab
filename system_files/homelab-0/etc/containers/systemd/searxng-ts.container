@@ -1,0 +1,19 @@
+[Unit]
+Description=SearXNG Tailscale sidecar
+After=local-fs.target
+
+[Container]
+Pod=searxng.pod
+Image=docker.io/tailscale/tailscale:v1.96.5@sha256:dbeff02d2337344b351afac203427218c4d0a06c43fc10a865184063498472a6
+AutoUpdate=registry
+Volume=searxng-ts-state:/var/lib/tailscale:Z
+Volume=/dev/net/tun:/dev/net/tun
+AddCapability=NET_ADMIN
+AddCapability=NET_RAW
+EnvironmentFile=-/etc/homelab/searxng-ts.env
+
+[Service]
+Restart=always
+
+[Install]
+WantedBy=multi-user.target default.target

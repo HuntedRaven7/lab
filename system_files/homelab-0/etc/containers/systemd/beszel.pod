@@ -1,0 +1,9 @@
+[Unit]
+Description=Beszel hub pod (app + Tailscale sidecar)
+
+[Pod]
+PodName=beszel
+PublishPort=8090:8090
+
+[Install]
+WantedBy=multi-user.target default.target

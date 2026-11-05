@@ -1,0 +1,15 @@
+[Unit]
+Description=Haptic web
+After=local-fs.target
+
+[Container]
+Pod=haptic.pod
+Image=docker.io/chroxify/haptic-web:latest@sha256:e501c12e88cdce6d5592818695775349b564f17777967cb65bedcc18ad7fbab0
+AutoUpdate=registry
+EnvironmentFile=-/etc/homelab/haptic.env
+
+[Service]
+Restart=always
+
+[Install]
+WantedBy=multi-user.target default.target

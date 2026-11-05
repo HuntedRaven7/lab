@@ -1,0 +1,8 @@
+[Unit]
+Description=Beszel agent pod (agent + Tailscale sidecar)
+
+[Pod]
+PodName=beszel-agent
+
+[Install]
+WantedBy=multi-user.target default.target

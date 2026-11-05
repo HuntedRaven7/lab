@@ -1,0 +1,18 @@
+[Unit]
+Description=Caddy HTTPS reverse proxy for Vaultwarden
+After=local-fs.target
+
+[Container]
+Pod=vaultwarden.pod
+Image=docker.io/library/caddy:2.11.2-alpine@sha256:834468128c7696cec0ceea6172f7d692daf645ae51983ca76e39da54a97c570d
+AutoUpdate=registry
+Volume=/etc/homelab/caddy/Caddyfile:/etc/caddy/Caddyfile:ro,Z
+Volume=caddy-data:/data:Z
+Volume=caddy-config:/config:Z
+EnvironmentFile=-/etc/homelab/caddy.env
+
+[Service]
+Restart=always
+
+[Install]
+WantedBy=multi-user.target default.target

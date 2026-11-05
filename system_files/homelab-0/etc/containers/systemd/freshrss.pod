@@ -1,0 +1,9 @@
+[Unit]
+Description=FreshRSS pod (app + Tailscale sidecar)
+
+[Pod]
+PodName=freshrss
+PublishPort=8081:80
+
+[Install]
+WantedBy=multi-user.target default.target

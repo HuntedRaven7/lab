@@ -1,0 +1,9 @@
+[Unit]
+Description=Haptic pod (app + Tailscale sidecar)
+
+[Pod]
+PodName=haptic
+PublishPort=8083:80
+
+[Install]
+WantedBy=multi-user.target default.target

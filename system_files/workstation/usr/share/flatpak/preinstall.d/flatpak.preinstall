@@ -1,0 +1,64 @@
+[Flatpak Preinstall io.github.kolunmi.Bazaar]
+Branch=stable
+IsRuntime=false
+
+[Flatpak Preinstall com.discordapp.Discord]
+Branch=stable
+IsRuntime=false
+
+[Flatpak Preinstall moe.launcher.the-honkers-railway-launcher]
+Branch=stable
+IsRuntime=false
+
+[Flatpak Preinstall com.google.Chrome]
+Branch=stable
+IsRuntime=false
+
+[Flatpak Preinstall com.super_productivity.SuperProductivity]
+Branch=stable
+IsRuntime=false
+
+[Flatpak Preinstall org.gnome.Calendar]
+Branch=stable
+IsRuntime=false
+
+[Flatpak Preinstall org.kde.krita]
+Branch=stable
+IsRuntime=false
+
+[Flatpak Preinstall org.prismlauncher.PrismLauncher]
+Branch=stable
+IsRuntime=false
+
+[Flatpak Preinstall org.fkoehler.KTailctl]
+Branch=stable
+IsRuntime=false
+
+[Flatpak Preinstall org.kde.drawy]
+Branch=stable
+IsRuntime=false
+
+[Flatpak Preinstall it.mijorus.gearlever]
+Branch=stable
+IsRuntime=false
+
+[Flatpak Preinstall md.obsidian.Obsidian]
+Branch=stable
+IsRuntime=false
+
+[Flatpak Preinstall com.vysp3r.ProtonPlus]
+Branch=stable
+IsRuntime=false
+
+[Flatpak Preinstall io.podman_desktop.PodmanDesktop]
+Branch=stable
+IsRuntime=false
+
+[Flatpak Preinstall com.github.tchx84.Flatseal]
+Branch=stable
+IsRuntime=false
+
+[Flatpak Preinstall org.localsend.localsend_app]
+Branch=stable
+IsRuntime=false
+

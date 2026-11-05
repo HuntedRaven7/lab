@@ -11,6 +11,9 @@ on:
         type: choice
         options:
           - homelab
+          - homelab-0
+          - homelab-1
+          - homelab-2
           - workstation
       upload-to-s3:
         description: "Upload to S3"

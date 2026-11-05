@@ -1,4 +1,4 @@
-set dotenv-filename := "homelab.env"
+set dotenv-filename := "envs/homelab.env"
 set dotenv-load
 
 export image_name := env_var("IMAGE_NAME")
@@ -101,9 +101,9 @@ build $target_image=image_name $tag=default_tag:
 
     set -euox pipefail
 
-    # Load image-specific build parameters, overriding homelab.env
+    # Load image-specific build parameters, overriding envs/homelab.env
     IMAGE_BASENAME="$(basename "${target_image}")"
-    ENV_FILE="${IMAGE_BASENAME}.env"
+    ENV_FILE="envs/${IMAGE_BASENAME}.env"
     if [[ -f "${ENV_FILE}" ]]; then
         set -a
         source "${ENV_FILE}"
@@ -111,9 +111,9 @@ build $target_image=image_name $tag=default_tag:
     fi
 
     # Use a dedicated Containerfile when one exists
-    CONTAINERFILE="Containerfile"
-    if [[ -f "Containerfile.${IMAGE_BASENAME}" ]]; then
-        CONTAINERFILE="Containerfile.${IMAGE_BASENAME}"
+    CONTAINERFILE="images/Containerfile"
+    if [[ -f "images/Containerfile.${IMAGE_BASENAME}" ]]; then
+        CONTAINERFILE="images/Containerfile.${IMAGE_BASENAME}"
     fi
 
     BUILD_ARGS=()
@@ -139,14 +139,31 @@ build $target_image=image_name $tag=default_tag:
     LABELS+=("--label" "org.opencontainers.image.title=${IMAGE_NAME}")
     LABELS+=("--label" "org.opencontainers.image.vendor=${REPO_ORGANIZATION}")
 
+    # Extra build args (e.g. BASE_IMAGE for homelab nodes)
+    EXTRA_BUILD_ARGS=()
+    if [[ -n "${BASE_IMAGE:-}" ]]; then
+        EXTRA_BUILD_ARGS+=("--build-arg" "BASE_IMAGE=${BASE_IMAGE}")
+    elif [[ "${IMAGE_BASENAME}" =~ ^homelab-[0-9]+$ ]]; then
+        # Default: consume local base homelab image for node builds
+        EXTRA_BUILD_ARGS+=("--build-arg" "BASE_IMAGE=localhost/homelab:${tag}")
+    fi
+
     # This actually builds the image!
-    PODMAN_BUILD_ARGS=("${BUILD_ARGS[@]}" "${LABELS[@]}" --pull=newer --tag "${target_image}:${tag}" --file "${CONTAINERFILE}")
+    PODMAN_BUILD_ARGS=("${BUILD_ARGS[@]}" "${EXTRA_BUILD_ARGS[@]}" "${LABELS[@]}" --pull=newer --tag "${target_image}:${tag}" --file "${CONTAINERFILE}")
 
     podman build "${PODMAN_BUILD_ARGS[@]}" .
 
 # Build the workstation base image
 [group('Workstation')]
 build-workstation $tag=default_tag: (build "workstation" tag)
+
+# Build homelab node images (consume base homelab)
+[group('Homelab')]
+build-homelab-0 $tag=default_tag: (build "homelab-0" tag)
+[group('Homelab')]
+build-homelab-1 $tag=default_tag: (build "homelab-1" tag)
+[group('Homelab')]
+build-homelab-2 $tag=default_tag: (build "homelab-2" tag)
 
 # Split the image for smaller updates (New)!
 rechunk $target_image=image_name $tag=default_tag:
