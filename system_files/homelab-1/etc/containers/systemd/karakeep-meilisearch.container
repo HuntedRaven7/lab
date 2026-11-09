@@ -7,7 +7,7 @@ Pod=karakeep.pod
 Image=docker.io/getmeili/meilisearch:v1.41.0@sha256:860fa4baed04ae1c235de870edab0c8006227546dea1bbb6411fbfc5e27cf1db
 AutoUpdate=registry
 Volume=karakeep-meili:/meili_data:Z
-EnvironmentFile=-/etc/homelab/karakeep.env
+EnvironmentFile=/etc/homelab/karakeep.env
 Environment=MEILI_NO_ANALYTICS=true
 
 [Service]

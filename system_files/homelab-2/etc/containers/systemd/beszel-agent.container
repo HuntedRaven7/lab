@@ -8,7 +8,7 @@ Image=ghcr.io/henrygd/beszel/beszel-agent:0.21.1@sha256:cb6868012964d7a68debaa2c
 AutoUpdate=registry
 Volume=/run/podman/podman.sock:/var/run/docker.sock:ro
 Volume=beszel-agent-data:/var/lib/beszel-agent:Z
-EnvironmentFile=-/etc/homelab/beszel-agent.env
+EnvironmentFile=/etc/homelab/beszel-agent.env
 
 [Service]
 Restart=always

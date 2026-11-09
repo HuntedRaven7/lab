@@ -10,7 +10,7 @@ Volume=karakeep-ts-state:/var/lib/tailscale:Z
 Volume=/dev/net/tun:/dev/net/tun
 AddCapability=NET_ADMIN
 AddCapability=NET_RAW
-EnvironmentFile=-/etc/homelab/karakeep-ts.env
+EnvironmentFile=/etc/homelab/karakeep-ts.env
 
 [Service]
 Restart=always
