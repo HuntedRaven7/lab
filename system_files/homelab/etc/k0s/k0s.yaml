@@ -5,6 +5,8 @@
 #   - network.kubeProxy.disabled is true
 # Helm is disabled: KubeStellar and the Console are installed by the
 # homelab-setup service with the standalone helm binary, not by k0s.
+#
+# bootc: /opt/cni/bin is read-only, so kubelet uses /var/lib/cni/bin.
 apiVersion: k0s.k0sproject.io/v1beta1
 kind: ClusterConfig
 metadata:
@@ -21,3 +23,8 @@ spec:
       concurrencyLevel: 5
   storage:
     type: etcd
+  workerProfiles:
+    - name: default
+      values:
+        cniBinDir: /var/lib/cni/bin
+        cniConfDir: /etc/cni/net.d

@@ -40,7 +40,12 @@ CONSOLE_VERSION="${HOMELAB_CONSOLE_VERSION:-0.3.43}"
 DOMAIN="${HOMELAB_DOMAIN:-home.arpa}"
 METALLB_POOL="${HOMELAB_METALLB_ADDRESSES:-}"
 
-mkdir -p "$SECRETS" /var/lib/homelab
+# Helm needs writable config/cache/data on immutable (bootc) systems where
+# /root may be read-only.
+export HELM_CONFIG_HOME=${HELM_CONFIG_HOME:-/var/lib/homelab/helm/config}
+export HELM_CACHE_HOME=${HELM_CACHE_HOME:-/var/lib/homelab/helm/cache}
+export HELM_DATA_HOME=${HELM_DATA_HOME:-/var/lib/homelab/helm/data}
+mkdir -p "$SECRETS" /var/lib/homelab "$HELM_CONFIG_HOME" "$HELM_CACHE_HOME" "$HELM_DATA_HOME"
 chmod 0700 "$SECRETS"
 
 # --- wait for k0s API -------------------------------------------------------
@@ -60,6 +65,9 @@ else
     log "installing Cilium ${CILIUM_VERSION}"
     $HELM repo add cilium https://helm.cilium.io/ >/dev/null 2>&1 || true
     $HELM repo update cilium >/dev/null 2>&1
+    # bootc images have an immutable root; /opt/cni/bin is read-only. Install CNI
+    # binaries under /var and keep conf in /etc/cni/net.d (writable on bootc).
+    mkdir -p /var/lib/cni/bin /etc/cni/net.d
     $HELM upgrade --install cilium cilium/cilium \
         --version "${CILIUM_VERSION}" \
         --namespace kube-system \
@@ -67,6 +75,8 @@ else
         --set k8sServiceHost="${API_ADDR}" \
         --set k8sServicePort=6443 \
         --set ipam.mode=kubernetes \
+        --set cni.binPath=/var/lib/cni/bin \
+        --set cni.confPath=/etc/cni/net.d \
         --set hubble.enabled=true \
         --set hubble.relay.enabled=true \
         --set hubble.ui.enabled=true \

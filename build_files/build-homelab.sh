@@ -30,12 +30,19 @@ dnf5 install -y tmux \
 # some layouts; systemd-tmpfiles will recreate on boot, but be explicit).
 mkdir -p /etc/k0s /var/lib/k0s /etc/homelab /etc/homelab/secrets /var/lib/homelab
 
-# tmpfiles rule to recreate /etc/homelab/secrets on boot (sensitive, 0700).
+# tmpfiles rules for runtime dirs (bootc: /var stateful, root immutable).
+# CNI binaries live under /var because /opt/cni/bin is read-only on bootc;
+# kubelet is configured via k0s workerProfiles (--cni-bin-dir=/var/lib/cni/bin).
 install -d -m 0755 /usr/lib/tmpfiles.d
 cat > /usr/lib/tmpfiles.d/homelab.conf <<'EOF'
 d /etc/homelab 0755 root root -
 d /etc/homelab/secrets 0700 root root -
 d /var/lib/homelab 0755 root root -
+d /var/lib/homelab/helm 0700 root root -
+d /var/lib/cni 0755 root root -
+d /var/lib/cni/bin 0755 root root -
+d /etc/cni 0755 root root -
+d /etc/cni/net.d 0755 root root -
 EOF
 
 # Make homelab helper scripts executable.
