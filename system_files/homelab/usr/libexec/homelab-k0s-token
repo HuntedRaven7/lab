@@ -1,0 +1,41 @@
+#!/usr/bin/env bash
+# homelab-k0s-token: ensure a worker join token exists, then exit.
+# The token is created by homelab-setup and stored in /etc/homelab/secrets/.
+# This helper regenerates it only if missing (e.g. after a reset) and k0s is up.
+
+set -euo pipefail
+
+SECRETS=/etc/homelab/secrets
+TOKEN_FILE="${SECRETS}/k0s-worker-token"
+
+CONF=/etc/homelab/homelab.conf
+[[ -f "$CONF" ]] && source "$CONF"
+
+mkdir -p "$SECRETS"
+chmod 0700 "$SECRETS"
+
+[[ -s "$TOKEN_FILE" ]] && exit 0
+
+# Wait for the local k0s API before creating a token.
+export KUBECONFIG=/var/lib/k0s/pki/admin.conf
+until /usr/local/bin/k0s kubectl get --raw='/readyz' >/dev/null 2>&1; do
+    sleep 5
+done
+
+/usr/local/bin/k0s token create --role=worker --expiry=8760h > "${TOKEN_FILE}.tmp"
+
+# Rewrite localhost to the real API address so remote workers can join.
+API_ADDR="${HOMELAB_API_ADDRESS:-$(hostname -I | awk '{print $1}')}"
+if command -v base64 >/dev/null 2>&1 && [[ -n "$API_ADDR" ]]; then
+    DECODED=$(base64 -d < "${TOKEN_FILE}.tmp" 2>/dev/null || true)
+    if [[ -n "$DECODED" ]]; then
+        printf '%s' "$DECODED" \
+            | sed "s|https://127.0.0.1:6443|https://${API_ADDR}:6443|g; s|https://localhost:6443|https://${API_ADDR}:6443|g" \
+            | base64 -w0 > "${TOKEN_FILE}.tmp.fixed" 2>/dev/null || true
+        [[ -s "${TOKEN_FILE}.tmp.fixed" ]] && mv "${TOKEN_FILE}.tmp.fixed" "${TOKEN_FILE}.tmp"
+        rm -f "${TOKEN_FILE}.tmp.fixed"
+    fi
+fi
+
+mv "${TOKEN_FILE}.tmp" "$TOKEN_FILE"
+chmod 0600 "$TOKEN_FILE"

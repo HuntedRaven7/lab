@@ -6,20 +6,43 @@ Bootc image builds for homelab and workstation.
 
 The homelab build is split into a shared base and node-specific images:
 
-- `homelab` — base image (OS + k0s + common homelab setup)
-- `homelab-0`, `homelab-1`, `homelab-2` — node images that `FROM` the base `homelab` image and layer in Podman quadlets
+- `homelab` — base image (OS + k0s + kubectl/helm/clusteradm + common homelab setup)
+- `homelab-0` — control plane (k0s controller, Cilium CNI, KubeStellar core + Console)
+- `homelab-1`, `homelab-2` — worker nodes (join the homelab-0 k0s cluster)
 
-### Quadlets & services
+The design mirrors the [Bluefin Server homelab profile](https://github.com/projectbluefin/server/blob/main/docs/skills/homelab-profile.md):
+k0s provides the Kubernetes runtime, Cilium replaces kube-proxy and provides the
+CNI, and a first-boot `homelab-setup` service installs KubeStellar on the
+control plane. **No secrets in the repo or image**: runtime material (GitHub
+OAuth, join tokens, etc.) is generated at first boot and stored under
+`/etc/homelab/secrets/` (mode 0600), never committed.
 
-Node-specific Podman Quadlets live under `system_files/homelab-<n>/etc/containers/systemd/` and are copied into each node image. Services run as per-service pods with a **Tailscale sidecar** container (own identity/state via `/etc/homelab/<service>-ts.env`).
+### KubeStellar (homelab-0)
 
-- `homelab-0`: Beszel hub, Vaultwarden (+ Caddy in-pod for HTTPS, proxies to Vaultwarden), FreshRSS, SearXNG
-- `homelab-1`: Beszel agent, Haptic, Karakeep (web + chrome + meilisearch)
-- `homelab-2`: Beszel agent, Glance
+On first boot, `homelab-setup.service` (idempotent, runs once) installs:
 
-Runtime config is provided via env/config files (quadlets use `EnvironmentFile=-/etc/homelab/*.env`). The repo ships **example-only** files (no real secrets) under `system_files/homelab-<n>/etc/homelab/examples/` (and example configs like `caddy/Caddyfile`, `glance/glance.yml`) — copy them to `/etc/homelab/` on the host and edit before use.
+- **Cilium** (CNI + kube-proxy replacement)
+- **MetalLB** (LoadBalancer; pool from `HOMELAB_METALLB_ADDRESSES`)
+- **KubeStellar core** chart (KubeFlex + ITS `its1` + WDS `wds1` + Postgres)
+- **KubeStellar Console** (demo/admin sign-in by default; GitHub OAuth optional)
 
-Container images in quadlets are pinned as `image:tag@sha256:...`; Renovate (`.github/renovate.json5`) manages quadlet image tags/digests.
+Configuration lives in `/etc/homelab/homelab.conf` (copied from the image
+template on first boot; later edits survive OS updates). See
+`system_files/homelab/etc/homelab/homelab.conf.template`.
+
+### Worker join (homelab-1/2)
+
+homelab-0 runs `homelab-k0s-token.service`, which ensures a k0s worker join
+token exists and serves it over HTTP on port 6447 (`GET /token`). homelab-1/2
+run `homelab-k0s-join.service`, which fetches that token (using
+`HOMELAB_CONTROL_PLANE` from `/etc/homelab/homelab.conf`), writes
+`/etc/k0s/token`, and starts `k0sworker.service`. The token is never committed.
+
+### Apps
+
+The previous Podman quadlet apps (Beszel, Vaultwarden, FreshRSS, SearXNG,
+Haptic, Karakeep, Glance) have been removed. Applications will be deployed
+later via KubeStellar BindingPolicies.
 
 ### Building
 

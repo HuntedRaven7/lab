@@ -1,0 +1,14 @@
+[Unit]
+Description=Serve k0s worker join token for homelab nodes
+After=k0scontroller.service network-online.target
+Wants=k0scontroller.service network-online.target
+
+[Service]
+Type=simple
+ExecStartPre=/usr/libexec/homelab-k0s-token
+ExecStart=/usr/libexec/homelab-k0s-token-server
+Restart=on-failure
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target

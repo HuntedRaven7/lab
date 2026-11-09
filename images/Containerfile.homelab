@@ -1,4 +1,10 @@
 # Base homelab image (shared)
+#
+# Runs a k0s Kubernetes cluster (mirroring the Bluefin Server homelab
+# pattern). homelab-0 is the control plane and installs KubeStellar
+# (core + Console) via the homelab-setup service. homelab-1/2 are worker
+# nodes that join using a token served by homelab-0. No secrets in the image
+# or the repo: runtime secrets live under /etc/homelab/secrets/.
 
 # Allow build scripts to be referenced without being copied into the final image
 FROM scratch AS ctx
@@ -39,7 +45,14 @@ RUN --mount=type=bind,from=ctx,source=/,target=/ctx \
     --mount=type=tmpfs,dst=/tmp \
     /ctx/uupd-build.sh
 
-# BUILD
+# k0s + kubectl + helm + clusteradm (OCM CLI, pinned for KubeStellar)
+RUN --mount=type=bind,from=ctx,source=/,target=/ctx \
+    --mount=type=cache,dst=/var/cache \
+    --mount=type=cache,dst=/var/log \
+    --mount=type=tmpfs,dst=/tmp \
+    /ctx/k0s.sh
+
+# BUILD (shared homelab files, packages, service presets)
 RUN --mount=type=bind,from=ctx,source=/,target=/ctx \
     --mount=type=cache,dst=/var/cache \
     --mount=type=cache,dst=/var/log \

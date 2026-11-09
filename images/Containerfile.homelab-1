@@ -1,4 +1,6 @@
-# Homelab node 1 (Podman quadlets) - consumes base homelab image
+# Homelab node 1 (worker) - consumes base homelab image.
+# Joins the homelab-0 k0s cluster as a worker node using a token fetched by
+# the homelab-k0s-join service.
 ARG BASE_IMAGE=ghcr.io/huntedraven7/homelab:latest
 
 FROM scratch AS ctx

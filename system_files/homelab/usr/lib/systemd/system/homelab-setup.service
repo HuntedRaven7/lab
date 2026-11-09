@@ -1,0 +1,17 @@
+[Unit]
+Description=Homelab first-boot setup (Cilium, KubeStellar core, Console)
+Documentation=https://github.com/kubestellar/kubestellar
+After=k0scontroller.service network-online.target
+Wants=k0scontroller.service network-online.target
+ConditionPathExists=!/var/lib/homelab/.setup-done
+
+[Service]
+Type=oneshot
+ExecStart=/usr/libexec/homelab-setup
+RemainAfterExit=yes
+Restart=on-failure
+RestartSec=30
+StartLimitInterval=0
+
+[Install]
+WantedBy=multi-user.target

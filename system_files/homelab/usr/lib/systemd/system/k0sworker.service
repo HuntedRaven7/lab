@@ -1,0 +1,22 @@
+[Unit]
+Description=k0s worker (zero friction Kubernetes)
+Documentation=https://k0sproject.io
+After=network-online.target homelab-k0s-join.service
+Wants=network-online.target
+# Worker only when a join token is present (written by homelab-k0s-join).
+ConditionPathExists=/etc/k0s/token
+
+[Service]
+Type=notify
+NotifyAccess=all
+ExecStart=/usr/local/bin/k0s worker --token-file /etc/k0s/token
+Restart=on-failure
+StartLimitInterval=5
+StartLimitBurst=10
+TimeoutStartSec=300
+RestartSec=15
+LimitNOFILE=65535
+KillMode=process
+
+[Install]
+WantedBy=multi-user.target

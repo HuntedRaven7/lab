@@ -1,9 +1,0 @@
-[Unit]
-Description=Glance pod (app + Tailscale sidecar)
-
-[Pod]
-PodName=glance
-PublishPort=8084:8080
-
-[Install]
-WantedBy=multi-user.target default.target

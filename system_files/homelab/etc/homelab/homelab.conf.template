@@ -1,0 +1,48 @@
+# /etc/homelab/homelab.conf — homelab configuration.
+#
+# This file is a TEMPLATE shipped in the image. On first boot the
+# homelab-setup service copies it to /etc/homelab/homelab.conf only while
+# that file is absent (tmpfiles C rule), so later edits to the real file
+# survive OS updates. Nothing secret lives here: secrets (GitHub OAuth,
+# JWT, TLS keys) are generated at runtime and stored under
+# /etc/homelab/secrets/ (mode 0600), never committed.
+#
+# systemd EnvironmentFile syntax: KEY=value, no shell expansion.
+
+# Role: control-plane (homelab-0) or node (homelab-1, homelab-2).
+#HOMELAB_ROLE=control-plane
+#HOMELAB_ROLE=node
+
+# MetalLB L2 address pool: free LAN addresses outside your DHCP range
+# (ranges or CIDRs, comma separated). Required for LoadBalancer Services.
+#HOMELAB_METALLB_ADDRESSES=192.0.2.240-192.0.2.250
+
+# Domain for the add-on HTTPRoutes (Envoy Gateway, HTTPS on port 443 of
+# the MetalLB address). Point argo., mcp. and kubestellar.<domain> at it.
+#HOMELAB_DOMAIN=home.arpa
+
+# KubeStellar core chart version (KubeFlex + ITS + WDS + Postgres).
+#HOMELAB_KUBESTELLAR_VERSION=0.30.0
+
+# KubeStellar Console chart version.
+#HOMELAB_CONSOLE_VERSION=0.3.42
+
+# Cilium chart version (kube-proxy replacement + CNI).
+#HOMELAB_CILIUM_VERSION=1.19.4
+
+# Control plane address used by Cilium's k8sServiceHost and by the
+# worker join service. hostname -I is used when unset.
+#HOMELAB_API_ADDRESS=192.0.2.10
+
+# Worker nodes (homelab-1/2): address of homelab-0 to fetch the join token
+# from (homelab-k0s-join.service) and to reach the Kubernetes API.
+#HOMELAB_CONTROL_PLANE=192.0.2.10
+#HOMELAB_TOKEN_PORT=6447
+
+# GitHub OAuth for the Console: callback
+# https://kubestellar.<domain>/auth/github/callback. Leave commented for
+# the built-in admin sign-in (password shown on the console).
+#HOMELAB_CONSOLE_GITHUB_CLIENT_ID=
+#HOMELAB_CONSOLE_GITHUB_CLIENT_SECRET=
+#HOMELAB_CONSOLE_ALLOWED_LOGINS=
+#HOMELAB_CONSOLE_ADMIN_LOGINS=

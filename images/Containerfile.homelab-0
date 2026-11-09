@@ -1,4 +1,6 @@
-# Homelab node 0 (Podman quadlets) - consumes base homelab image
+# Homelab node 0 (control plane) - consumes base homelab image.
+# Runs k0s as a controller (+worker), installs KubeStellar (core + Console)
+# via the homelab-setup service, and serves a worker join token for homelab-1/2.
 ARG BASE_IMAGE=ghcr.io/huntedraven7/homelab:latest
 
 FROM scratch AS ctx
