@@ -7,7 +7,7 @@ Pod=beszel.pod
 Image=ghcr.io/henrygd/beszel/beszel:0.21.1@sha256:8514a69d9bbbcb74f371a3205561ee231fc0289739cea64e8131f341d695b770
 AutoUpdate=registry
 Volume=beszel-data:/beszel_data:Z
-EnvironmentFile=-/etc/homelab/beszel.env
+EnvironmentFile=/etc/homelab/beszel.env
 
 [Service]
 Restart=always

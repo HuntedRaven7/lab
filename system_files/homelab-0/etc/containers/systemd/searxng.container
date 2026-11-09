@@ -8,7 +8,7 @@ Image=docker.io/searxng/searxng:2026.11.2-cccbc9e15@sha256:892ed5710603e38f9dc20
 AutoUpdate=registry
 Volume=searxng-config:/etc/searxng:Z
 Volume=searxng-data:/var/cache/searxng:Z
-EnvironmentFile=-/etc/homelab/searxng.env
+EnvironmentFile=/etc/homelab/searxng.env
 
 [Service]
 Restart=always

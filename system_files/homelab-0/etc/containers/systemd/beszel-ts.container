@@ -10,7 +10,7 @@ Volume=beszel-ts-state:/var/lib/tailscale:Z
 Volume=/dev/net/tun:/dev/net/tun
 AddCapability=NET_ADMIN
 AddCapability=NET_RAW
-EnvironmentFile=-/etc/homelab/beszel-ts.env
+EnvironmentFile=/etc/homelab/beszel-ts.env
 
 [Service]
 Restart=always

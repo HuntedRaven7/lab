@@ -9,7 +9,7 @@ AutoUpdate=registry
 Volume=/etc/homelab/caddy/Caddyfile:/etc/caddy/Caddyfile:ro,Z
 Volume=caddy-data:/data:Z
 Volume=caddy-config:/config:Z
-EnvironmentFile=-/etc/homelab/caddy.env
+EnvironmentFile=/etc/homelab/caddy.env
 
 [Service]
 Restart=always
