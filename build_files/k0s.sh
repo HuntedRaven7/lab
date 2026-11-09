@@ -35,7 +35,7 @@ install -m 0755 kubectl /usr/local/bin/kubectl
 rm -f kubectl
 
 curl -fsSL https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 \
-    | bash -- --version v3.18.0 # renovate: datasource=github-releases depName=helm/helm
+    | DESIRED_VERSION=v3.18.0 bash # renovate: datasource=github-releases depName=helm/helm
 
 curl -fsSL "https://github.com/open-cluster-management-io/clusteradm/releases/download/v${CLUSTERADM_VERSION}/clusteradm_${CLUSTERADM_VERSION}_linux_amd64.tar.gz" \
     -o /tmp/clusteradm.tar.gz
