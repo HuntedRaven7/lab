@@ -12,6 +12,7 @@ dnf5 install -y tmux \
         zstd \
 	fwupd-efi \
         podman \
+	vim \
 	wireguard-tools \
 	NetworkManager-wifi \
 	container-selinux \
