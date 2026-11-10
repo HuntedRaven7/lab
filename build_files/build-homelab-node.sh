@@ -31,20 +31,18 @@ fi
 # present). Enable the appropriate role per node.
 if [[ "$NODE" == "0" ]]; then
     # homelab-0: control plane. Runs k0s controller (with --enable-worker in
-    # K0S_CONTROLLER_ARGS) and the full KubeStellar stack. Serves the worker
-    # join token. The join service and standalone worker are irrelevant here.
+    # K0S_CONTROLLER_ARGS). Serves the worker join token. Cilium/MetalLB/
+    # KubeStellar are installed manually (see docs/kubestellar-manual-setup.md).
     systemctl enable k0scontroller.service
     systemctl disable k0sworker.service || true
-    systemctl enable homelab-setup.service
     systemctl enable homelab-k0s-token.service
     systemctl disable homelab-k0s-join.service || true
 else
     # homelab-1/2: worker nodes. They fetch the join token from homelab-0 and
-    # start as k0s workers. The controller/setup/token services are irrelevant.
+    # start as k0s workers.
     systemctl disable k0scontroller.service || true
     systemctl enable k0sworker.service
     systemctl enable homelab-k0s-join.service
-    systemctl disable homelab-setup.service || true
     systemctl disable homelab-k0s-token.service || true
 fi
 

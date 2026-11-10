@@ -2,7 +2,7 @@
 
 set -ouex pipefail
 
-# Copy shared homelab system files (k0s units, homelab-setup, configs).
+# Copy shared homelab system files (k0s units, token services, configs).
 cp -avf "/ctx/system_files"/. /
 
 # Fedora stack: base tools. Podman is kept for ad-hoc debugging, but all
@@ -46,8 +46,7 @@ d /etc/cni/net.d 0755 root root -
 EOF
 
 # Make homelab helper scripts executable.
-chmod +x /usr/libexec/homelab-setup \
-         /usr/libexec/homelab-k0s-token \
+chmod +x /usr/libexec/homelab-k0s-token \
          /usr/libexec/homelab-k0s-token-server \
          /usr/libexec/homelab-k0s-join
 

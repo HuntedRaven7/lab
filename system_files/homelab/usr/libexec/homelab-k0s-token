@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # homelab-k0s-token: ensure a worker join token exists, then exit.
-# The token is created by homelab-setup and stored in /etc/homelab/secrets/.
-# This helper regenerates it only if missing (e.g. after a reset) and k0s is up.
+# Used by homelab-k0s-token.service on homelab-0. Stores token in
+# /etc/homelab/secrets/k0s-worker-token (never committed) and rewrites the
+# embedded API address so workers can join. Regenerates only if missing.
 
 set -euo pipefail
 

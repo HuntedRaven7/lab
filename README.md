@@ -12,23 +12,21 @@ The homelab build is split into a shared base and node-specific images:
 
 The design mirrors the [Bluefin Server homelab profile](https://github.com/projectbluefin/server/blob/main/docs/skills/homelab-profile.md):
 k0s provides the Kubernetes runtime, Cilium replaces kube-proxy and provides the
-CNI, and a first-boot `homelab-setup` service installs KubeStellar on the
-control plane. **No secrets in the repo or image**: runtime material (GitHub
-OAuth, join tokens, etc.) is generated at first boot and stored under
-`/etc/homelab/secrets/` (mode 0600), never committed.
+CNI. **No secrets in the repo or image**: runtime material (join tokens, optional
+OAuth, etc.) is generated at runtime and stored under `/etc/homelab/secrets/`
+(mode 0600), never committed.
 
 ### KubeStellar (homelab-0)
 
-On first boot, `homelab-setup.service` (idempotent, runs once) installs:
+KubeStellar (core chart + Console) is installed **manually** via Helm (no
+auto-download/bootstrap on boot). See
+[`docs/kubestellar-manual-setup.md`](docs/kubestellar-manual-setup.md) for
+prerequisites, Cilium/MetalLB/KubeStellar/Console Helm commands, token handling,
+and a full reset procedure.
 
-- **Cilium** (CNI + kube-proxy replacement)
-- **MetalLB** (LoadBalancer; pool from `HOMELAB_METALLB_ADDRESSES`)
-- **KubeStellar core** chart (KubeFlex + ITS `its1` + WDS `wds1` + Postgres)
-- **KubeStellar Console** (demo/admin sign-in by default; GitHub OAuth optional)
-
-Configuration lives in `/etc/homelab/homelab.conf` (copied from the image
-template on first boot; later edits survive OS updates). See
-`system_files/homelab/etc/homelab/homelab.conf.template`.
+`homelab-k0s-token.service` on homelab-0 ensures a worker join token exists and
+serves it for homelab-1/2 (`GET http://<control-plane>:6447/token`); Cilium,
+MetalLB, and KubeStellar are not auto-installed.
 
 ### Worker join (homelab-1/2)
 

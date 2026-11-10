@@ -1,6 +1,6 @@
 # /etc/sysconfig/k0s — k0s controller arguments.
 # The homelab control plane (homelab-0) runs workloads and accepts joins,
-# so it is not --single. Helm and autopilot are disabled: KubeStellar and
-# the Console are installed by the homelab-setup service with the standalone
-# helm binary.
+# so it is not --single. Helm and autopilot are disabled: Cilium,
+# KubeStellar and the Console are installed manually with the standalone
+# helm binary (see docs/kubestellar-manual-setup.md).
 K0S_CONTROLLER_ARGS=--enable-worker --no-taints --disable-components=helm,autopilot

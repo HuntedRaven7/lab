@@ -3,8 +3,8 @@
 # Cilium replaces kube-proxy and provides the CNI, so:
 #   - network.provider is "custom" (k0s ships no CNI)
 #   - network.kubeProxy.disabled is true
-# Helm is disabled: KubeStellar and the Console are installed by the
-# homelab-setup service with the standalone helm binary, not by k0s.
+# Helm/autopilot are disabled in k0s controller args; Cilium, KubeStellar and
+# the Console are installed manually with the standalone helm binary (see docs).
 #
 # bootc: /opt/cni/bin is read-only, so kubelet uses /var/lib/cni/bin.
 apiVersion: k0s.k0sproject.io/v1beta1

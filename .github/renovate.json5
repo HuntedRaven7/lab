@@ -42,45 +42,6 @@
       "datasourceTemplate": "github-releases",
       "depNameTemplate": "open-cluster-management-io/clusteradm",
       "extractVersionTemplate": "^v(?<version>.*)$"
-    },
-    {
-      "customType": "regex",
-      "description": "Track default Cilium Helm chart version in homelab-setup",
-      "managerFilePatterns": [
-        "/(^|/)system_files/.*/usr/libexec/homelab-setup$/"
-      ],
-      "matchStrings": [
-        "HOMELAB_CILIUM_VERSION=\"\\$\\{HOMELAB_CILIUM_VERSION:-(?<currentValue>[^\"]+)\\}\""
-      ],
-      "datasourceTemplate": "helm",
-      "depNameTemplate": "cilium",
-      "registryUrlTemplate": "https://helm.cilium.io/"
-    },
-    {
-      "customType": "regex",
-      "description": "Track default KubeStellar core chart version in homelab-setup",
-      "managerFilePatterns": [
-        "/(^|/)system_files/.*/usr/libexec/homelab-setup$/"
-      ],
-      "matchStrings": [
-        "HOMELAB_KUBESTELLAR_VERSION=\"\\$\\{HOMELAB_KUBESTELLAR_VERSION:-(?<currentValue>[^\"]+)\\}\""
-      ],
-      "datasourceTemplate": "docker",
-      "depNameTemplate": "ghcr.io/kubestellar/kubestellar/core-chart",
-      "versioningTemplate": "semver"
-    },
-    {
-      "customType": "regex",
-      "description": "Track default KubeStellar Console Helm chart version in homelab-setup",
-      "managerFilePatterns": [
-        "/(^|/)system_files/.*/usr/libexec/homelab-setup$/"
-      ],
-      "matchStrings": [
-        "HOMELAB_CONSOLE_VERSION=\"\\$\\{HOMELAB_CONSOLE_VERSION:-(?<currentValue>[^\"]+)\\}\""
-      ],
-      "datasourceTemplate": "helm",
-      "depNameTemplate": "kubestellar-console",
-      "registryUrlTemplate": "https://kubestellar.github.io/console"
     }
   ],
   "packageRules": [

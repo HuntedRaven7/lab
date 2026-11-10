@@ -1,10 +1,9 @@
 # /etc/homelab/homelab.conf — homelab configuration.
 #
-# This file is a TEMPLATE shipped in the image. On first boot the
-# homelab-setup service copies it to /etc/homelab/homelab.conf only while
-# that file is absent (tmpfiles C rule), so later edits to the real file
-# survive OS updates. Nothing secret lives here: secrets (GitHub OAuth,
-# JWT, TLS keys) are generated at runtime and stored under
+# This file is a TEMPLATE shipped in the image. On first boot it is copied to
+# /etc/homelab/homelab.conf only while that file is absent (tmpfiles C rule),
+# so later edits to the real file survive OS updates. Nothing secret lives
+# here: secrets/tokens are generated at runtime and stored under
 # /etc/homelab/secrets/ (mode 0600), never committed.
 #
 # systemd EnvironmentFile syntax: KEY=value, no shell expansion.

@@ -1,10 +1,11 @@
 # Base homelab image (shared)
 #
 # Runs a k0s Kubernetes cluster (mirroring the Bluefin Server homelab
-# pattern). homelab-0 is the control plane and installs KubeStellar
-# (core + Console) via the homelab-setup service. homelab-1/2 are worker
-# nodes that join using a token served by homelab-0. No secrets in the image
-# or the repo: runtime secrets live under /etc/homelab/secrets/.
+# pattern). homelab-0 is the control plane; Cilium, MetalLB, KubeStellar
+# (core + Console) are installed manually (see docs/kubestellar-manual-setup.md).
+# homelab-1/2 are worker nodes that join using a token served by homelab-0.
+# No secrets in the image or the repo: runtime secrets live under
+# /etc/homelab/secrets/.
 
 # Allow build scripts to be referenced without being copied into the final image
 FROM scratch AS ctx
