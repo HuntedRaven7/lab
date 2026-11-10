@@ -30,9 +30,9 @@ chmod +x /usr/local/bin/k0s
 
 K8S_MINOR="${K0S_VERSION#v}"
 K8S_MINOR="${K8S_MINOR%%+*}"
-curl -fsSLO "https://dl.k8s.io/release/v${K8S_MINOR}/bin/linux/amd64/kubectl"
-install -m 0755 kubectl /usr/local/bin/kubectl
-rm -f kubectl
+curl -fsSL "https://dl.k8s.io/release/v${K8S_MINOR}/bin/linux/${K0S_ARCH}/kubectl" -o /tmp/kubectl
+install -m 0755 /tmp/kubectl /usr/local/bin/kubectl
+rm -f /tmp/kubectl
 
 curl -fsSL https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 \
     | DESIRED_VERSION=v3.18.0 bash # renovate: datasource=github-releases depName=helm/helm

@@ -9,7 +9,7 @@ ConditionPathExists=/etc/k0s/token
 [Service]
 Type=notify
 NotifyAccess=all
-ExecStart=/usr/local/bin/k0s worker --token-file /etc/k0s/token
+ExecStart=/usr/local/bin/k0s worker --token-file /etc/k0s/token --kubelet-root-dir=/var/lib/kubelet
 Restart=on-failure
 StartLimitInterval=5
 StartLimitBurst=10

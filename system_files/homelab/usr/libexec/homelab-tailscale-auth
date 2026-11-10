@@ -1,0 +1,20 @@
+#!/usr/bin/env bash
+# Authenticate Tailscale on first boot using
+# /etc/homelab/secrets/tailscale-authkey (never baked into the image).
+# No-op if the key file is absent or the node is already authenticated.
+set -euo pipefail
+
+KEY_FILE=/etc/homelab/secrets/tailscale-authkey
+[[ -s "$KEY_FILE" ]] || exit 0
+
+# Already connected? Nothing to do.
+if tailscale ip -4 >/dev/null 2>&1 && [[ -n "$(tailscale ip -4 2>/dev/null || true)" ]]; then
+    echo "Tailscale already authenticated"
+    exit 0
+fi
+
+HOSTNAME_SHORT="$(cat /proc/sys/kernel/hostname | cut -d. -f1)"
+AUTHKEY="$(tr -d '[:space:]' < "$KEY_FILE")"
+
+echo "Running tailscale up for ${HOSTNAME_SHORT}"
+tailscale up --authkey="$AUTHKEY" --hostname="$HOSTNAME_SHORT"

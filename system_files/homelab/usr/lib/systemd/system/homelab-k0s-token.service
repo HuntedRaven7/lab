@@ -5,6 +5,8 @@ Wants=k0scontroller.service network-online.target
 
 [Service]
 Type=simple
+# The token generator waits up to 10 minutes for the local API.
+TimeoutStartSec=15min
 ExecStartPre=/usr/libexec/homelab-k0s-token
 ExecStart=/usr/libexec/homelab-k0s-token-server
 Restart=on-failure

@@ -6,7 +6,9 @@
 # Helm/autopilot are disabled in k0s controller args; Cilium, KubeStellar and
 # the Console are installed manually with the standalone helm binary (see docs).
 #
-# bootc: /opt/cni/bin is read-only, so kubelet uses /var/lib/cni/bin.
+# bootc: /opt/cni/bin is read-only. CNI bin/conf paths are configured in the
+# containerd drop-in at /etc/k0s/containerd.d/10-cni-paths.toml, not here
+# (KubeletConfiguration has no cniBinDir/cniConfDir fields).
 apiVersion: k0s.k0sproject.io/v1beta1
 kind: ClusterConfig
 metadata:
@@ -26,5 +28,23 @@ spec:
   workerProfiles:
     - name: default
       values:
-        cniBinDir: /var/lib/cni/bin
-        cniConfDir: /etc/cni/net.d
+        cgroupDriver: systemd
+        systemReserved:
+          cpu: 250m
+          memory: 256Mi
+          ephemeral-storage: 1Gi
+        kubeReserved:
+          cpu: 250m
+          memory: 512Mi
+          ephemeral-storage: 1Gi
+        evictionHard:
+          memory.available: 200Mi
+          nodefs.available: 10%
+          imagefs.available: 10%
+        evictionMinimumReclaim:
+          memory.available: 0Mi
+          nodefs.available: 500Mi
+          imagefs.available: 500Mi
+        containerLogMaxSize: 50Mi
+        containerLogMaxFiles: 3
+        maxPods: 110

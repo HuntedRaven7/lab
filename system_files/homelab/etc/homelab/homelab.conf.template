@@ -21,22 +21,28 @@
 #HOMELAB_DOMAIN=home.arpa
 
 # KubeStellar core chart version (KubeFlex + ITS + WDS + Postgres).
-#HOMELAB_KUBESTELLAR_VERSION=0.30.0
+#HOMELAB_KUBESTELLAR_VERSION=0.30.1
 
 # KubeStellar Console chart version.
-#HOMELAB_CONSOLE_VERSION=0.3.42
+#HOMELAB_CONSOLE_VERSION=0.3.43
 
 # Cilium chart version (kube-proxy replacement + CNI).
-#HOMELAB_CILIUM_VERSION=1.19.4
+#HOMELAB_CILIUM_VERSION=1.20.4
 
 # Control plane address used by Cilium's k8sServiceHost and by the
-# worker join service. hostname -I is used when unset.
+# worker join service. Set this explicitly on multi-homed nodes (LAN +
+# Tailscale); otherwise the source address of the default route is used.
 #HOMELAB_API_ADDRESS=192.0.2.10
 
 # Worker nodes (homelab-1/2): address of homelab-0 to fetch the join token
-# from (homelab-k0s-join.service) and to reach the Kubernetes API.
+# from (homelab-k0s-join.service) and to reach the Kubernetes API. A static
+# IP is more reliable than the .local mDNS name (mDNS support is enabled in
+# the image, but AP/client isolation can break it).
 #HOMELAB_CONTROL_PLANE=192.0.2.10
 #HOMELAB_TOKEN_PORT=6447
+
+# Optional first-boot Tailscale auth: put a reusable auth key in
+# /etc/homelab/secrets/tailscale-authkey (mode 0600). Never commit it.
 
 # GitHub OAuth for the Console: callback
 # https://kubestellar.<domain>/auth/github/callback. Leave commented for

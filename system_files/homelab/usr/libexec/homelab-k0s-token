@@ -17,16 +17,33 @@ chmod 0700 "$SECRETS"
 
 [[ -s "$TOKEN_FILE" ]] && exit 0
 
-# Wait for the local k0s API before creating a token.
+# Wait (with a bound) for the local k0s API before creating a token. If the
+# API never comes up, exit non-zero so systemd can restart the unit instead of
+# hanging forever in "activating".
 export KUBECONFIG=/var/lib/k0s/pki/admin.conf
-until /usr/local/bin/k0s kubectl get --raw='/readyz' >/dev/null 2>&1; do
+for _ in $(seq 1 120); do
+    if /usr/local/bin/k0s kubectl get --raw='/readyz' >/dev/null 2>&1; then
+        break
+    fi
     sleep 5
 done
+if ! /usr/local/bin/k0s kubectl get --raw='/readyz' >/dev/null 2>&1; then
+    echo "k0s API not ready after 10 minutes" >&2
+    exit 1
+fi
 
 /usr/local/bin/k0s token create --role=worker --expiry=8760h > "${TOKEN_FILE}.tmp"
 
 # Rewrite localhost to the real API address so remote workers can join.
-API_ADDR="${HOMELAB_API_ADDRESS:-$(hostname -I | awk '{print $1}')}"
+# Prefer HOMELAB_API_ADDRESS (set it to the LAN IP). The fallback uses the
+# source address of the default route; `hostname -I` is unreliable once
+# Tailscale/Cilium/podman interfaces exist.
+API_ADDR="${HOMELAB_API_ADDRESS:-$(ip -4 route get 1.1.1.1 2>/dev/null | awk '{for (i=1; i<=NF; i++) if ($i == "src") { print $(i+1); exit }}')}"
+if [[ -z "$API_ADDR" ]]; then
+    echo "unable to determine API address; set HOMELAB_API_ADDRESS" >&2
+    rm -f "${TOKEN_FILE}.tmp"
+    exit 1
+fi
 if command -v base64 >/dev/null 2>&1 && [[ -n "$API_ADDR" ]]; then
     DECODED=$(base64 -d < "${TOKEN_FILE}.tmp" 2>/dev/null || true)
     if [[ -n "$DECODED" ]]; then

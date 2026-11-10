@@ -3,4 +3,4 @@
 # so it is not --single. Helm and autopilot are disabled: Cilium,
 # KubeStellar and the Console are installed manually with the standalone
 # helm binary (see docs/kubestellar-manual-setup.md).
-K0S_CONTROLLER_ARGS=--enable-worker --no-taints --disable-components=helm,autopilot
+K0S_CONTROLLER_ARGS=--enable-worker --no-taints --kubelet-root-dir=/var/lib/kubelet --disable-components=helm,autopilot

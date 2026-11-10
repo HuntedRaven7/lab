@@ -11,7 +11,27 @@ import os
 import sys
 
 TOKEN_FILE = "/etc/homelab/secrets/k0s-worker-token"
+CONF_FILE = "/etc/homelab/homelab.conf"
 PORT = 6447
+
+
+def conf_value(key: str, default: str = "") -> str:
+    """Read a KEY=value pair from homelab.conf (no shell evaluation)."""
+    try:
+        with open(CONF_FILE, encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if line.startswith(f"{key}="):
+                    return line.split("=", 1)[1].strip().strip("\"'")
+    except FileNotFoundError:
+        pass
+    return default
+
+
+# Bind to the LAN API address when known instead of every interface. The token
+# endpoint is unauthenticated, so also restrict port 6447 to trusted worker
+# addresses at the firewall if your LAN is not trusted.
+BIND_ADDR = conf_value("HOMELAB_API_ADDRESS", "0.0.0.0") or "0.0.0.0"
 
 
 class TokenHandler(http.server.BaseHTTPRequestHandler):
@@ -37,5 +57,5 @@ class TokenHandler(http.server.BaseHTTPRequestHandler):
 
 
 if __name__ == "__main__":
-    server = http.server.ThreadingHTTPServer(("0.0.0.0", PORT), TokenHandler)
+    server = http.server.ThreadingHTTPServer((BIND_ADDR, PORT), TokenHandler)
     server.serve_forever()

@@ -1,0 +1,20 @@
+[Unit]
+Description=Bring Tailscale up with a first-boot auth key
+Documentation=https://tailscale.com/kb/1085/auth-keys/
+After=network-online.target tailscaled.service
+Wants=network-online.target tailscaled.service
+ConditionPathExists=/etc/homelab/secrets/tailscale-authkey
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/libexec/homelab-tailscale-auth
+# The key is single-use unless it is a reusable/ephemeral key. Do not retry
+# aggressively and burn through keys.
+Restart=on-failure
+RestartSec=30
+StartLimitInterval=10min
+StartLimitBurst=3
+
+[Install]
+WantedBy=multi-user.target

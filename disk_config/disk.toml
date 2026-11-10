@@ -1,3 +1,9 @@
+# Container images, etcd data, Helm cache and PVCs all live under /var.
+# Keep the immutable root small and give /var the space.
 [[customizations.filesystem]]
 mountpoint = "/"
-minsize = "20 GiB"
+minsize = "15 GiB"
+
+[[customizations.filesystem]]
+mountpoint = "/var"
+minsize = "30 GiB"
