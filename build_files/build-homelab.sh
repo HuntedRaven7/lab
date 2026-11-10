@@ -54,3 +54,6 @@ chmod +x /usr/libexec/homelab-setup \
 # Base services: firewalld for node security; podman.socket kept for debugging.
 systemctl enable firewalld.service
 systemctl enable podman.socket
+   
+# [IM]MUTABLE /opt
+rm -rf /opt && mkdir /opt

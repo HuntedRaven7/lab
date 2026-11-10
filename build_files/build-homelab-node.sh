@@ -47,3 +47,7 @@ else
     systemctl disable homelab-setup.service || true
     systemctl disable homelab-k0s-token.service || true
 fi
+
+# [IM]MUTABLE /opt
+rm -rf /opt && mkdir /opt
+
