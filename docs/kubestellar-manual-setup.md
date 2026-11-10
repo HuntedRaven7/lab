@@ -134,6 +134,114 @@ sudo /usr/local/bin/k0s kubectl get pods -A | egrep -v 'Running|Completed' || tr
 sudo /usr/local/bin/k0s kubectl get events -A --sort-by=.lastTimestamp | tail -n 60
 ```
 
+### Recovery: stuck `ks-core` install / missing Postgres (KubeFlex)
+
+Symptoms: `helm status ks-core -n default` shows `pending-install` (or
+`failed`), `helm upgrade --install` fails with `Error: UPGRADE FAILED: "ks-core"
+has no deployed releases`, and/or `kubeflex-controller-manager` is stuck
+`Init:0/1` in `wait-postgresql` waiting for pod `postgres-postgresql-0` in
+`kubeflex-system` that never appears. (The init wait loop logs to the container,
+not Kubernetes Events, so events may look idle.)
+
+**Diagnose:**
+```bash
+export KUBECONFIG=/var/lib/k0s/pki/admin.conf
+export HELM_CONFIG_HOME=/var/lib/homelab/helm/config
+export HELM_CACHE_HOME=/var/lib/homelab/helm/cache
+export HELM_DATA_HOME=/var/lib/homelab/helm/data
+
+sudo -E /usr/local/bin/helm list -n default -a
+sudo -E /usr/local/bin/helm status ks-core -n default
+sudo -E /usr/local/bin/helm history ks-core -n default
+sudo /usr/local/bin/k0s kubectl get sc,pvc -A
+sudo /usr/local/bin/k0s kubectl get all,pvc,job,cm,secret -n kubeflex-system -o wide
+sudo /usr/local/bin/k0s kubectl logs -n kubeflex-system job/ks-core --all-containers --tail=300 2>&1 || true
+sudo /usr/local/bin/k0s kubectl logs -n kubeflex-system deploy/kubeflex-controller-manager -c wait-postgresql --tail=50 2>&1 || true
+# confirm whether a Postgres StatefulSet/Pod is rendered at all
+sudo -E /usr/local/bin/helm get manifest ks-core -n default | egrep -n '^kind: (StatefulSet|PersistentVolumeClaim)|postgres-postgresql|helm.sh/hook'
+```
+
+**Cleanup a stuck/broken release** (stop any running `helm ... --wait` first):
+```bash
+sudo pkill -f "/usr/local/bin/helm upgrade --install ks-core" || true
+sudo -E /usr/local/bin/helm uninstall ks-core -n default || true
+sudo /usr/local/bin/k0s kubectl delete controlplanes.tenancy.kflex.kubestellar.org --all -A --ignore-not-found
+sudo /usr/local/bin/k0s kubectl delete postcreatehooks.tenancy.kflex.kubestellar.org --all -A --ignore-not-found
+sudo /usr/local/bin/k0s kubectl delete ns kubeflex-system --ignore-not-found --wait=true --timeout=180s
+# if kubeflex-system is stuck Terminating, clear finalizers:
+# sudo /usr/local/bin/k0s kubectl get ns kubeflex-system -o json | sed 's/"finalizers": \[[^]]*\]/"finalizers": []/' | \
+#   sudo /usr/local/bin/k0s kubectl replace --raw "/api/v1/namespaces/kubeflex-system/finalize" -f -
+sudo -E /usr/local/bin/helm list -A -a
+sudo /usr/local/bin/k0s kubectl get ns kubeflex-system controlplanes.tenancy.kflex.kubestellar.org -A 2>&1 || true
+```
+
+**Ensure storage before retry (k0s ships no default StorageClass):**
+```bash
+sudo /usr/local/bin/k0s kubectl get sc
+# if none/default missing, install local-path-provisioner (review before applying):
+sudo /usr/local/bin/k0s kubectl apply -f https://raw.githubusercontent.com/rancher/local-path-provisioner/v0.0.32/deploy/local-path-storage.yaml
+sudo /usr/local/bin/k0s kubectl -n local-path-storage rollout status deploy/local-path-provisioner --timeout=180s
+sudo /usr/local/bin/k0s kubectl patch storageclass local-path \
+  -p '{"metadata":{"annotations":{"storageclass.kubernetes.io/is-default-class":"true"}}}'
+sudo /usr/local/bin/k0s kubectl get sc
+```
+
+**Retry core install** after cleanup + storage (use chart-managed Postgres path):
+```bash
+sudo -E /usr/local/bin/helm upgrade --install ks-core \
+  oci://ghcr.io/kubestellar/kubestellar/core-chart \
+  --version "${KUBESTELLAR_VERSION:-0.30.1}" \
+  --set-json='ITSes=[{"name":"its1"}]' \
+  --set-json='WDSes=[{"name":"wds1"}]' \
+  --set-json='verbosity.default=5' \
+  --set-json='kubeflex-operator.verbosity=5' \
+  --timeout 24h --wait
+```
+
+**If Postgres still never appears** (controller keeps waiting for
+`postgres-postgresql-0` in `kubeflex-system`), the release did not create a
+matching Postgres workload (e.g. not rendered/installed for this chart version,
+or missing storage/prereqs). Inspect and prefer fixing chart values/flow for the
+pinned version:
+```bash
+sudo -E /usr/local/bin/helm show values oci://ghcr.io/kubestellar/kubestellar/core-chart --version "${KUBESTELLAR_VERSION:-0.30.1}" \
+  | egrep -n 'postgres|postgresql|installPostgreSQL|persistence|storage|database'
+sudo -E /usr/local/bin/helm template ks-core oci://ghcr.io/kubestellar/kubestellar/core-chart --version "${KUBESTELLAR_VERSION:-0.30.1}" \
+  --set-json='ITSes=[{"name":"its1"}]' --set-json='WDSes=[{"name":"wds1"}]' \
+  | egrep -n '^kind: (StatefulSet|PersistentVolumeClaim|Job)|postgres-postgresql|helm.sh/hook'
+```
+
+**Manual PostgreSQL (last resort / unblock):** install a Postgres instance that
+satisfies the KubeFlex wait (`pod postgres-postgresql-0` Ready in
+`kubeflex-system`). Name, service, and credentials **must match what KubeFlex
+expects** for this chart version; an ad-hoc DB with wrong auth/DB names can let
+the init container pass but break KubeFlex/ControlPlanes. Check chart
+values/secrets first, then install (example only — adjust auth/db/service/size
+to match chart expectations):
+
+```bash
+# confirm expected names/auth from chart manifests/values/secrets before applying
+sudo -E /usr/local/bin/helm show values oci://ghcr.io/kubestellar/kubestellar/core-chart --version "${KUBESTELLAR_VERSION:-0.30.1}" \
+  | egrep -n 'postgres|database|auth|password|user|secret' | head -120
+
+# example Bitnami chart; change password/params to match KubeFlex expectations
+sudo -E /usr/local/bin/helm repo add bitnami https://charts.bitnami.com/bitnami 2>/dev/null || true
+sudo -E /usr/local/bin/helm repo update
+sudo -E /usr/local/bin/helm upgrade --install postgres oci://registry-1.docker.io/bitnamicharts/postgresql \
+  -n kubeflex-system --create-namespace \
+  --set fullnameOverride=postgres-postgresql \
+  --set auth.postgresPassword='CHANGE-ME' \
+  --set primary.persistence.enabled=true \
+  --set primary.persistence.size=8Gi \
+  --wait --timeout 10m
+
+sudo /usr/local/bin/k0s kubectl get pods,pvc,svc -n kubeflex-system -o wide
+```
+
+If you install Postgres manually into a broken `pending-install` state, prefer
+to clean up and reinstall `ks-core` cleanly once storage/values are correct so
+chart-managed resources and secrets stay consistent.
+
 ## Install KubeStellar Console (Helm)
 
 ```bash
