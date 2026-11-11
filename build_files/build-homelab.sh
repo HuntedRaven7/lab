@@ -7,7 +7,7 @@ cp -avf "/ctx/system_files"/. /
 
 # Fedora stack: base tools. Podman is kept for ad-hoc debugging, but all
 # workloads run on k0s/Kubernetes (KubeStellar). k0s uses containerd.
-dnf5 install -y tmux \
+dnf install -y tmux \
 	git \
 	firewalld \
         zstd \
@@ -86,7 +86,7 @@ chmod +x /usr/libexec/homelab-k0s-token \
 
 # Base services: firewalld for node security; podman.socket kept for debugging.
 systemctl enable firewalld.service
-systemctl enable podman.socket
+systemctl disable podman.socket
 systemctl enable sshd.service
 
 # CSI volume propagation + optional Tailscale first-boot auth.

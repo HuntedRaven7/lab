@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Install build deps
-dnf5 -y install go
+dnf -y install go
 
 # Clone and build main uupd 
 rm -rf /root 

@@ -7,14 +7,19 @@
 # No secrets in the image or the repo: runtime secrets live under
 # /etc/homelab/secrets/.
 
+ARG AKMODS_VERSION="${AKMODS_VERSION:-coreos-stable-44}"
+
 # Allow build scripts to be referenced without being copied into the final image
 FROM scratch AS ctx
 COPY build_files /
 COPY system_files/homelab/ /system_files
 COPY repos/ /repos
 
+# The nice core os kernel that you WILL love
+FROM ghcr.io/ublue-os/akmods-zfs:${AKMODS_VERSION} AS akmods_zfs
+
 # Base Image
-FROM quay.io/fedora/fedora-bootc:45
+FROM quay.io/centos-bootc/centos-bootc:c10s
 
 # Laptop suspend off when lid closed
 RUN systemctl mask sleep.target suspend.target hibernate.target hybrid-sleep.target suspend-then-hibernate.target && \
@@ -22,19 +27,14 @@ RUN systemctl mask sleep.target suspend.target hibernate.target hybrid-sleep.tar
     printf '[Login]\nHandleLidSwitch=ignore\nHandleLidSwitchExternalPower=ignore\nHandleLidSwitchDocked=ignore\nHandleSuspendKey=ignore\nHandleHibernateKey=ignore\nIdleAction=ignore\n' \
       > /etc/systemd/logind.conf.d/50-no-suspend.conf
 
-# Bring in repos
+# Kernel swap
 RUN --mount=type=bind,from=ctx,source=/,target=/ctx \
     --mount=type=cache,dst=/var/cache \
     --mount=type=cache,dst=/var/log \
     --mount=type=tmpfs,dst=/tmp \
-    /ctx/repo.sh
-
-# Le Tailscale
-RUN --mount=type=bind,from=ctx,source=/,target=/ctx \
-    --mount=type=cache,dst=/var/cache \
-    --mount=type=cache,dst=/var/log \
-    --mount=type=tmpfs,dst=/tmp \
-    /ctx/tailscale.sh
+    --mount=type=bind,from=akmods_zfs,src=/rpms,dst=/tmp/akmods-zfs-rpms \
+    --mount=type=bind,from=akmods_zfs,src=/kernel-rpms,dst=/tmp/kernel-rpms \
+    /ctx/kernel-swap.sh
 
 # UUPD
 RUN --mount=type=bind,from=ctx,source=/,target=/ctx \
