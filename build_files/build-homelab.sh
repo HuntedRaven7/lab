@@ -36,6 +36,8 @@ dnf5 install -y tmux \
         iwlwifi-dvm-firmware \
         iwlwifi-mvm-firmware
 
+dnf5 install -y 'dnf5-command(config-manager)'
+
 # Ensure runtime directories exist (bootc images may have /var as tmpfs in
 # some layouts; systemd-tmpfiles will recreate on boot, but be explicit).
 mkdir -p /etc/k0s /var/lib/k0s /etc/homelab /etc/homelab/secrets /var/lib/homelab \
