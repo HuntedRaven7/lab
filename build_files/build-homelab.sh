@@ -7,7 +7,7 @@ cp -avf "/ctx/system_files"/. /
 
 # Fedora stack: base tools. Podman is kept for ad-hoc debugging, but all
 # workloads run on k0s/Kubernetes (KubeStellar). k0s uses containerd.
-dnf install -y tmux \
+dnf5 install -y tmux \
 	git \
 	firewalld \
         zstd \

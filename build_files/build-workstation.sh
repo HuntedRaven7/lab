@@ -32,7 +32,7 @@ PACKAGES=(
 	alsa-firmware 
 )
 
-dnf -y install "${PACKAGES[@]}"
+dnf5 -y install "${PACKAGES[@]}"
 
 # Flatpak slop
 FLATHUB_REPO_SHA256=3371dd250e61d9e1633630073fefda153cd4426f72f4afa0c3373ae2e8fea03a

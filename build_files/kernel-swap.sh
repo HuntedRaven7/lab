@@ -2,7 +2,7 @@
 
 set ${CI:+-x} -euo pipefail
 
-dnf -y install 'dnf-command(versionlock)'
+dnf5 -y install 'dnf-command(versionlock)'
 
 KERNEL_NAME="kernel"
 
@@ -31,7 +31,7 @@ done
 mkdir -p /etc/dracut.conf.d
 echo 'tmpdir="/boot"' > /etc/dracut.conf.d/01-tmpdir.conf
 
-dnf -y install --setopt=tsflags=noscripts "${RPM_NAMES[@]}"
+dnf5 -y install --setopt=tsflags=noscripts "${RPM_NAMES[@]}"
 
 depmod -a "${CACHED_VERSION}"
 

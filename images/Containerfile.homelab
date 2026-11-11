@@ -19,7 +19,7 @@ COPY repos/ /repos
 FROM ghcr.io/ublue-os/akmods-zfs:${AKMODS_VERSION} AS akmods_zfs
 
 # Base Image
-FROM quay.io/centos-bootc/centos-bootc:c10s
+FROM quay.io/fedora/fedora-bootc:45
 
 # Laptop suspend off when lid closed
 RUN systemctl mask sleep.target suspend.target hibernate.target hybrid-sleep.target suspend-then-hibernate.target && \
@@ -35,6 +35,20 @@ RUN --mount=type=bind,from=ctx,source=/,target=/ctx \
     --mount=type=bind,from=akmods_zfs,src=/rpms,dst=/tmp/akmods-zfs-rpms \
     --mount=type=bind,from=akmods_zfs,src=/kernel-rpms,dst=/tmp/kernel-rpms \
     /ctx/kernel-swap.sh
+
+# Repo stuff
+RUN --mount=type=bind,from=ctx,source=/,target=/ctx \
+    --mount=type=cache,dst=/var/cache \
+    --mount=type=cache,dst=/var/log \
+    --mount=type=tmpfs,dst=/tmp \
+    /ctx/repo.sh
+
+# Le Scale Tail
+RUN --mount=type=bind,from=ctx,source=/,target=/ctx \
+    --mount=type=cache,dst=/var/cache \
+    --mount=type=cache,dst=/var/log \
+    --mount=type=tmpfs,dst=/tmp \
+    /ctx/tailscale.sh
 
 # UUPD
 RUN --mount=type=bind,from=ctx,source=/,target=/ctx \
