@@ -138,19 +138,54 @@ server = "https://registry-1.docker.io"
 k0s reloads containerd when drop-ins change. Convert to the
 `io.containerd.cri.v1.images` v3 path if you move to k0s >= 1.36.
 
-## Node access and first boot
+## Tailscale (optional VPN)
 
-- `sshd` is installed and enabled. Add keys at install time
-  (`bootc install --root-ssh-authorized-keys=...`) or a provisioning step; do
-  not bake private keys into the image.
-- Optional Tailscale: put a reusable auth key at
-  `/etc/homelab/secrets/tailscale-authkey` (mode 0600) and
-  `homelab-tailscale-auth.service` runs `tailscale up` on boot. The key is not
-  baked into the image.
-- Hostnames `homelab-0/1/2` are baked per node image and systemd-resolved mDNS
-  is enabled, so `homelab-0.local` works on a normal LAN. Prefer static
-  IPs/DHCP reservations; AP/client isolation breaks mDNS, ARP-based MetalLB and
-  VXLAN.
+The images install and enable `tailscaled` (`build_files/tailscale.sh`), but **do not** bake auth keys. Tailscale is used for remote node access only by default; it is not required for the cluster to form.
+
+### First boot setup
+
+1. Create the auth key file on the node (never commit it):
+   ```bash
+   sudo mkdir -p /etc/homelab/secrets
+   echo -n "tskey-..." | sudo tee /etc/homelab/secrets/tailscale-authkey > /dev/null
+   sudo chmod 600 /etc/homelab/secrets/tailscale-authkey
+   ```
+2. Enable/start the helper (it runs once on first boot):
+   ```bash
+   sudo systemctl enable --now homelab-tailscale-auth.service
+   ```
+   `homelab-tailscale-auth.service` only runs if `/etc/homelab/secrets/tailscale-authkey` exists, is non-empty, and the node is not already authenticated. Use a reusable/ephemeral key if you expect to reprovision nodes.
+
+### Networking notes (multi-homed / pod egress)
+
+This cluster can be multi-homed (e.g., `wlp0s12f0` LAN + `tailscale0`). With Cilium in kube-proxy replacement mode, pod traffic egress depends on correct masquerade/forwarding:
+
+- **Firewalld**: `tailscale0` is trusted by the build (`firewall-offline-cmd --zone=trusted --add-interface=tailscale0`). Ensure the LAN uplink zone allows forwarding/egress as needed; `public` has `masquerade: no` by default in this setup.
+- **Pod egress/SNAT**: If pods cannot reach the internet (DNS/HTTPS timeouts even to `1.1.1.1`), Cilium iptables masquerade may be insufficient on nftables/firewalld hosts. Prefer **BPF masquerading**:
+  ```bash
+  export KUBECONFIG=/var/lib/k0s/pki/admin.conf
+  export HELM_CONFIG_HOME=/var/lib/homelab/helm/config HELM_CACHE_HOME=/var/lib/homelab/helm/cache HELM_DATA_HOME=/var/lib/homelab/helm/data
+  sudo -E /usr/local/bin/helm upgrade cilium cilium/cilium \
+    -n kube-system --reuse-values --version "${HOMELAB_CILIUM_VERSION:-1.20.4}" \
+    --set bpf.masquerade=true \
+    --wait --timeout 10m
+  ```
+  On multi-homed nodes, pin the egress device to the LAN uplink if traffic tries to go out `tailscale0` (e.g. `--set devices='{wlp0s12f0}'` or `egressMasqueradeInterfaces=wlp0s12f0`).
+- **Reverse path filtering**: Tailscale sets `net.ipv4.conf.tailscale0.rp_filter=2` in some setups; if forwarded pod traffic is dropped, check `net.ipv4.conf.all.rp_filter`/`net.ipv4.ip_forward` and adjust only if necessary for your environment.
+- **DNS**: The node uses systemd-resolved (`/etc/resolv.conf` stub). For pod DNS, prefer CoreDNS forwarding to reliable upstreams rather than relying on the router if it drops pod-sourced UDP/53 traffic.
+
+### Troubleshooting
+
+```bash
+# Pod egress/DNS test
+sudo -E /usr/local/bin/k0s kubectl run dns-test --rm -i --restart=Never --image=busybox:1.36 -- nslookup charts.loft.sh 1.1.1.1
+sudo -E /usr/local/bin/k0s kubectl run egress --rm -i --restart=Never --image=busybox:1.36 -- ping -c2 -W2 1.1.1.1
+
+# Cilium/firewall state
+sudo -E /usr/local/bin/k0s kubectl -n kube-system exec ds/cilium -- cilium-dbg status --verbose | grep -A2 -E 'Masquerading|Devices'
+sudo firewall-cmd --get-active-zones
+sudo nft list ruleset | grep -n -E 'tailscale|10\.244|masquerade|FORWARD' | head -40
+```
 
 ## Bootc updates on cluster nodes
 

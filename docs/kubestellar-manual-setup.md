@@ -52,10 +52,55 @@ token for homelab-1/2.
   sudo mkdir -p "$HELM_CONFIG_HOME" "$HELM_CACHE_HOME" "$HELM_DATA_HOME"
   ```
 
+### If using Tailscale
+
+Tailscale is optional and used for remote node access; it is not required for the
+cluster. If the node is multi-homed (LAN + `tailscale0`), configure addresses and
+egress explicitly to avoid Cilium/kubelet API reachability and pod egress issues.
+
+1. **Set stable API addresses in `/etc/homelab/homelab.conf` before install/reset
+   workflows that depend on them:**
+   - `HOMELAB_API_ADDRESS`: the address the Kubernetes API is reachable on from
+     this node and from components that must reach it (usually the LAN/static IP,
+     **not** the Tailscale IP). This is used for Cilium `k8sServiceHost` and for
+     rewriting join tokens. Auto-detecting from the default route can pick the
+     wrong interface on Tailscale hosts.
+   - `HOMELAB_CONTROL_PLANE` (workers): address of `homelab-0` to fetch the join
+     token from and reach the API (prefer LAN/static IP; can be a Tailscale IP
+     only if your firewall/routing and token endpoint access are intentionally
+     configured for that path).
+2. **(Optional) Authenticate Tailscale on the node** (secrets never committed):
+   ```bash
+   sudo mkdir -p /etc/homelab/secrets
+   echo -n "tskey-..." | sudo tee /etc/homelab/secrets/tailscale-authkey >/dev/null
+   sudo chmod 600 /etc/homelab/secrets/tailscale-authkey
+   sudo systemctl enable --now homelab-tailscale-auth.service
+   tailscale status
+   ```
+   The helper runs only if the key file exists/non-empty and the node is not
+   already authenticated. `/var/lib/tailscale` holds device state and is not
+   removed by the normal cluster hard reset steps below.
+3. **After installing Cilium on a multi-homed node, verify pod egress/DNS** (pods
+   must reach upstream DNS/HTTPS for charts/manifests). If pods cannot reach the
+   internet, prefer BPF masquerade and pin the LAN egress device:
+   ```bash
+   export KUBECONFIG=/var/lib/k0s/pki/admin.conf
+   sudo -E /usr/local/bin/helm upgrade cilium cilium/cilium -n kube-system \
+     --reuse-values --version "${HOMELAB_CILIUM_VERSION:-1.20.4}" \
+     --set bpf.masquerade=true \
+     --set devices='{wlp0s12f0}' \
+     --wait --timeout 10m
+   sudo -E /usr/local/bin/k0s kubectl run egress --rm -i --restart=Never --image=busybox:1.36 -- ping -c2 -W2 1.1.1.1
+   sudo -E /usr/local/bin/k0s kubectl run dns-test --rm -i --restart=Never --image=busybox:1.36 -- nslookup charts.loft.sh 1.1.1.1
+   ```
+   Replace `wlp0s12f0` with the actual LAN uplink. See [Tailscale (optional VPN)](platform-addons.md#tailscale-optional-vpn) for firewalld/rp_filter/DNS details.
+
 ## Install Cilium (CNI + kube-proxy replacement)
 
 Use a Cilium version compatible with your kernel/k0s (tested: `1.20.4` on
-`7.2.15-300.fc45.x86_64`, k0s `v1.34.5+k0s.0` in this repo's environment).
+`7.2.15-300.fc45.x86_64` and `7.3.3-300.fc45.x86_64`, k0s `v1.34.5+k0s.0` in
+this repo's environment). On very new Fedora kernels, prefer the latest tested
+`1.20.x` release if an older image/config still pins an earlier Cilium.
 
 ```bash
 export KUBECONFIG=/var/lib/k0s/pki/admin.conf
@@ -63,6 +108,9 @@ export HELM_CONFIG_HOME=/var/lib/homelab/helm/config
 export HELM_CACHE_HOME=/var/lib/homelab/helm/cache
 export HELM_DATA_HOME=/var/lib/homelab/helm/data
 CILIUM_VERSION="${HOMELAB_CILIUM_VERSION:-1.20.4}"
+# Must be the API server address reachable from this node. Set
+# HOMELAB_API_ADDRESS explicitly on multi-homed nodes (LAN + Tailscale); the
+# default-route source address may not be the address k0s is reachable on.
 API_ADDR="${HOMELAB_API_ADDRESS:-$(ip -4 route get 1.1.1.1 | awk '{for (i=1;i<=NF;i++) if ($i=="src") { print $(i+1); exit }}')}"
 
 sudo mkdir -p /var/lib/cni/bin /etc/cni/net.d
@@ -77,6 +125,7 @@ sudo -E /usr/local/bin/helm upgrade --install cilium cilium/cilium \
   --set ipam.mode=kubernetes \
   --set cni.binPath=/var/lib/cni/bin \
   --set cni.confPath=/etc/cni/net.d \
+  --set operator.replicas=1 \
   --set hubble.enabled=true \
   --set hubble.relay.enabled=true \
   --set hubble.ui.enabled=true \
@@ -85,6 +134,74 @@ sudo -E /usr/local/bin/helm upgrade --install cilium cilium/cilium \
 sudo /usr/local/bin/k0s kubectl -n kube-system get pods -l app.kubernetes.io/part-of=cilium -o wide
 sudo /usr/local/bin/k0s kubectl get nodes -o wide
 ```
+
+**Tailscale/multi-homed note:** if pod DNS/egress fails after Cilium is running
+(e.g. `nslookup`/image pulls from pods time out), re-run the upgrade with
+`--set bpf.masquerade=true` and, if needed, pin the LAN device
+(`--set devices='{<lan-iface>}'`). Verify with a busybox `ping`/`nslookup` pod
+before installing KubeStellar charts that pull images. Keep `k8sServiceHost` on
+the reachable LAN API address (not the Tailscale IP) unless you intentionally
+operate the control plane over Tailscale.
+
+`operator.replicas=1` avoids a hostPort conflict on a single control-plane
+node (`cilium-operator` uses ports such as 9234/9963); increase only when you
+have multiple nodes/compatible scheduling.
+
+Do not install MetalLB or other CNI-dependent workloads before Cilium is healthy
+and the node is `Ready`. With `network.provider: custom` and kube-proxy
+disabled, there is no working pod network until Cilium initializes.
+
+### Cilium troubleshooting
+
+If the node stays `NotReady` with `NetworkPluginNotReady` / `cni plugin not
+initialized`, inspect the agent and host prerequisites:
+
+```bash
+export KUBECONFIG=/var/lib/k0s/pki/admin.conf
+sudo -E /usr/local/bin/k0s kubectl get nodes,pods -A -o wide
+sudo -E /usr/local/bin/k0s kubectl -n kube-system describe pod -l k8s-app=cilium
+# kubectl logs may be unavailable while konnectivity/node networking is down:
+sudo find /var/log/pods -path '*cilium*agent*' -name '*.log' -print -exec sudo tail -n 200 {} \;
+sudo -E /usr/local/bin/helm -n kube-system get values cilium -a
+sudo -E /usr/local/bin/k0s kubectl -n kube-system get cm cilium-config -o yaml | head -220
+```
+
+Common issues:
+
+- **Wrong `k8sServiceHost` / `HOMELAB_API_ADDRESS`**: on multi-homed nodes the
+  kubelet InternalIP, Cilium `k8sServiceHost`, and the reachable apiserver
+  address can diverge (for example LAN `192.168.x.y` vs Tailscale `100.x.y.z`).
+  Set `HOMELAB_API_ADDRESS` in `/etc/homelab/homelab.conf` to the address the
+  apiserver is actually reachable on, reinstall/upgrade Cilium, then restart
+  Cilium pods if needed:
+  `sudo -E /usr/local/bin/k0s kubectl -n kube-system rollout restart ds/cilium deploy/cilium-operator`.
+- **Kernel/BPF incompatibility**: `cilium-agent` crashes early with
+  `level=fatal msg="failed to probe helper" ... progType=CGroupSock helper=FnSetRetval ... R1 is not a scalar`
+  on some newer kernels when using an older Cilium release (observed with
+  Cilium `1.19.4` on kernel `7.3.3-300.fc45.x86_64`). Upgrade to a Cilium
+  release that supports the running kernel (for this repo, `1.20.4` is the
+  tested default) and redeploy. If it still fails, collect
+  `uname -r`, the full agent log, and
+  `sudo dmesg | egrep -i 'bpf|verifier|cilium' | tail -80`.
+- **Single-node operator scheduling**: `0/1 nodes ... didn't have free ports for
+  the requested pod ports` for the second `cilium-operator` pod means the
+  deployment is scaled above 1 on a single node. Set `operator.replicas=1`.
+- **CNI paths on bootc**: binaries/config must live under `/var/lib/cni/bin`
+  and `/etc/cni/net.d` (see `/etc/k0s/containerd.d/10-cni-paths.toml`), not
+  `/opt`. Do not add `cniBinDir`/`cniConfDir` to `workerProfiles`; they are not
+  KubeletConfiguration fields.
+- **`kubectl logs` unavailable**: when the node is `NotReady`, the API server
+  log proxy and konnectivity path may fail (`No agent available`). Read logs
+  from `/var/log/pods`, `sudo journalctl -u k0scontroller`, or containerd/crictl
+  instead. For upgrades, `helm upgrade ... --wait` can time out while the agent
+  is crashlooping even if config was applied; fix the agent crash and let the
+  DaemonSet roll.
+
+After Cilium is healthy, repair dependent components (for example rerun
+`helm upgrade --install metallb ... --wait` and reapply
+`IPAddressPool`/`L2Advertisement` once `metallb-webhook-service` has ready
+endpoints). `Error ... failed calling webhook ... No agent available` usually
+means the target service/pods are not Ready, not that the manifest is wrong.
 
 ## Install MetalLB (LoadBalancer)
 
@@ -380,6 +497,21 @@ until /usr/local/bin/k0s kubectl get --raw='/readyz' >/dev/null 2>&1; do sleep 5
 /usr/local/bin/k0s kubectl get nodes -o wide
 ```
 
+**Tailscale notes for reset/retry:**
+- This reset does **not** remove `/var/lib/tailscale` or stop `tailscaled`, so the
+  node usually stays authenticated. Keep it if you rely on Tailscale for remote
+  access during reinstall.
+- To fully re-provision Tailscale identity, also run:
+  `sudo systemctl stop tailscaled homelab-tailscale-auth.service 2>/dev/null || true`
+  and `sudo rm -rf /var/lib/tailscale /etc/homelab/secrets/tailscale-authkey`,
+  then recreate the auth key and start the auth service after reboot/install as
+  needed.
+- Before rerunning installs, confirm `HOMELAB_API_ADDRESS` in
+  `/etc/homelab/homelab.conf` points to the intended reachable API address (LAN
+  recommended on multi-homed hosts). After Cilium install, re-apply
+  `bpf.masquerade=true` (and LAN `devices` pinning if used) because Cilium state
+  is wiped by this reset.
+
 Then install Cilium, (optional) MetalLB, KubeStellar core, and Console via the
 Helm commands above. `homelab-k0s-token.service` can be started/enabled to
 (regen if missing and) serve the worker token for homelab-1/2.
@@ -398,6 +530,12 @@ sudo /usr/local/bin/k0s kubectl get events -A --sort-by=.lastTimestamp | tail -n
 sudo -E /usr/local/bin/helm list -A
 sudo journalctl -u k0scontroller.service -u homelab-k0s-token.service -b --no-pager -n 200
 ```
+
+**If using Tailscale (multi-homed):** verify the kubelet/apiserver address and
+Cilium `k8sServiceHost` match the intended reachable address (usually LAN). Test
+pod egress/DNS early (`busybox` `ping 1.1.1.1` and `nslookup charts.loft.sh 1.1.1.1`);
+if it fails, use Cilium BPF masquerade and pin the LAN egress device. See
+[Tailscale (optional VPN)](platform-addons.md#tailscale-optional-vpn).
 
 **Common bootc/k0s/Cilium notes:**
 - CNI paths live in the containerd drop-in

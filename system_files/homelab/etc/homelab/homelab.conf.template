@@ -26,12 +26,15 @@
 # KubeStellar Console chart version.
 #HOMELAB_CONSOLE_VERSION=0.3.43
 
-# Cilium chart version (kube-proxy replacement + CNI).
+# Cilium chart version (kube-proxy replacement + CNI). Pin a release compatible
+# with the running kernel (on newer Fedora kernels, older Cilium can crash in
+# BPF helper probes during startup; 1.20.4 is the tested default here).
 #HOMELAB_CILIUM_VERSION=1.20.4
 
 # Control plane address used by Cilium's k8sServiceHost and by the
 # worker join service. Set this explicitly on multi-homed nodes (LAN +
-# Tailscale); otherwise the source address of the default route is used.
+# Tailscale) to the address the apiserver is actually reachable on; otherwise
+# the source address of the default route is used and may not match.
 #HOMELAB_API_ADDRESS=192.0.2.10
 
 # Worker nodes (homelab-1/2): address of homelab-0 to fetch the join token
