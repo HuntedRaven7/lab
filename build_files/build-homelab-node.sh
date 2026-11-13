@@ -10,7 +10,7 @@ fi
 
 mkdir -p /etc/kubernetes /var/lib/etcd /var/backups/etcd
 
-# Open ports needed by Kubernetes, Cilium, and the join server.
+# Open ports needed by Kubernetes, Cilium, and (control-plane only) join server.
 # firewall-offline-cmd works in image builds without a running firewalld.
 if command -v firewall-offline-cmd >/dev/null 2>&1; then
     firewall-offline-cmd --add-service=ssh || true          # remote administration
@@ -21,7 +21,9 @@ if command -v firewall-offline-cmd >/dev/null 2>&1; then
     firewall-offline-cmd --add-port=10250/tcp || true  # kubelet
     firewall-offline-cmd --add-port=10257/tcp || true  # controller-manager
     firewall-offline-cmd --add-port=10259/tcp || true  # scheduler
-    firewall-offline-cmd --add-port=6447/tcp || true   # join command server
+    if [[ "$NODE" == "0" ]]; then
+        firewall-offline-cmd --add-port=6447/tcp || true   # join command server (control-plane only)
+    fi
     firewall-offline-cmd --add-port=8472/udp || true   # VXLAN (Cilium default)
     firewall-offline-cmd --add-port=7946/tcp || true   # MetalLB memberlist
     firewall-offline-cmd --add-port=7946/udp || true   # MetalLB memberlist
@@ -39,6 +41,7 @@ if [[ "$NODE" == "0" ]]; then
     systemctl enable k8s-control-plane-init.service
     systemctl enable k8s-join-server.service
     systemctl enable k8s-etcd-backup.timer
+    systemctl enable k8s-approve-node-csrs.timer
     systemctl disable k8s-worker-join.service || true
 else
     # homelab-1/2: worker nodes. Fetch join command from homelab-0 and join.
@@ -46,6 +49,7 @@ else
     systemctl disable k8s-control-plane-init.service || true
     systemctl disable k8s-join-server.service || true
     systemctl disable k8s-etcd-backup.timer || true
+    systemctl disable k8s-approve-node-csrs.timer || true
 fi
 
 # [IM]MUTABLE /opt

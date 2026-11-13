@@ -7,17 +7,69 @@ set -euo pipefail
 
 JOIN_FILE=/etc/kubernetes/join-command
 NODE_ENV=/etc/kubernetes/node.env
+ADMIN_CONF=/etc/kubernetes/admin.conf
+KUBELET_CONF=/etc/kubernetes/kubelet.conf
+BUNDLED_MANIFESTS=/usr/share/homelab/manifests
 LOG_TAG=k8s-control-plane-init
 
 log() { logger -t "$LOG_TAG" -- "$*"; echo "[$LOG_TAG] $*"; }
 
-[[ -f /etc/kubernetes/admin.conf ]] && { log "control plane already initialized"; exit 0; }
-[[ -f "$NODE_ENV" ]] && source "$NODE_ENV"
+patch_cm_flexvolume() {
+  local cm=/etc/kubernetes/manifests/kube-controller-manager.yaml
+  [[ -f "$cm" ]] || return 0
+  if grep -q '/usr/libexec/kubernetes/kubelet-plugins/volume/exec' "$cm"; then
+    sed -i 's|path: /usr/libexec/kubernetes/kubelet-plugins/volume/exec|path: /var/lib/kubelet/volumeplugins|' "$cm"
+    log "patched controller-manager flexvolume hostPath to /var/lib/kubelet/volumeplugins"
+  fi
+}
 
+ensure_join_file() {
+  if [[ -f "$ADMIN_CONF" ]]; then
+    kubeadm token create --print-join-command > "${JOIN_FILE}.tmp"
+    chmod 0600 "${JOIN_FILE}.tmp"
+    mv "${JOIN_FILE}.tmp" "$JOIN_FILE"
+  fi
+}
+
+apply_bundled_manifests() {
+  [[ -d "$BUNDLED_MANIFESTS" ]] || return 0
+  [[ -f "$ADMIN_CONF" ]] || return 0
+  command -v kubectl >/dev/null 2>&1 || return 0
+  export KUBECONFIG="$ADMIN_CONF"
+  for _ in $(seq 1 24); do
+    kubectl get --raw='/readyz' >/dev/null 2>&1 && break
+    sleep 5
+  done
+  kubectl get --raw='/readyz' >/dev/null 2>&1 || { log "API not ready; skipping bundled manifests"; return 0; }
+  for f in "$BUNDLED_MANIFESTS"/*.yaml "$BUNDLED_MANIFESTS"/*.yml; do
+    [[ -f "$f" ]] || continue
+    if kubectl apply -f "$f" >/dev/null 2>&1; then
+      log "applied bundled manifest $(basename "$f")"
+    else
+      log "warning: failed to apply bundled manifest $(basename "$f")"
+    fi
+  done
+}
+
+[[ -f "$NODE_ENV" ]] && source "$NODE_ENV"
 mkdir -p /etc/kubernetes
 
 API_ADDR="${API_ADVERTISE_ADDRESS:-$(ip -4 route get 1.1.1.1 2>/dev/null | awk '{for (i=1; i<=NF; i++) if ($i == "src") { print $(i+1); exit }}')}"
 [[ -n "$API_ADDR" ]] || { log "unable to determine API address"; exit 1; }
+
+if [[ -f "$ADMIN_CONF" ]]; then
+  log "control plane already initialized; reconciling state"
+  patch_cm_flexvolume
+  if [[ ! -s "$KUBELET_CONF" ]] && command -v kubeadm >/dev/null 2>&1; then
+    log "regenerating missing kubelet.conf"
+    kubeadm init phase kubeconfig kubelet --apiserver-advertise-address="${API_ADDR}" || true
+  fi
+  install -d -m 0700 /root/.kube
+  install -m 0600 "$ADMIN_CONF" /root/.kube/config
+  ensure_join_file || true
+  apply_bundled_manifests || true
+  exit 0
+fi
 
 log "running kubeadm init (apiserver-advertise-address=${API_ADDR})"
 kubeadm init \
@@ -28,17 +80,12 @@ kubeadm init \
   --skip-phases=addon/kube-proxy
 
 # bootc root is immutable: controller-manager must use a writable flexvolume path.
-CM_MANIFEST=/etc/kubernetes/manifests/kube-controller-manager.yaml
-if [[ -f "$CM_MANIFEST" ]]; then
-  sed -i 's|path: /usr/libexec/kubernetes/kubelet-plugins/volume/exec|path: /var/lib/kubelet/volumeplugins|' "$CM_MANIFEST"
-fi
+patch_cm_flexvolume
 
 # Kubeconfig for local admin/root convenience.
 install -d -m 0700 /root/.kube
-install -m 0600 /etc/kubernetes/admin.conf /root/.kube/config
+install -m 0600 "$ADMIN_CONF" /root/.kube/config
 
-kubeadm token create --print-join-command > "${JOIN_FILE}.tmp"
-chmod 0600 "${JOIN_FILE}.tmp"
-mv "${JOIN_FILE}.tmp" "$JOIN_FILE"
-
+ensure_join_file
+apply_bundled_manifests || true
 log "control plane initialized"

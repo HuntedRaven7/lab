@@ -9,13 +9,16 @@ repo.
 
 `manifests/local-path-storage.yaml` is a bootc-patched local-path-provisioner:
 the volume root is `/var/lib/homelab/local-path` (not `/opt`) and the
-StorageClass is default.
+StorageClass is default. The image also ships it at
+`/usr/share/homelab/manifests/local-path-storage.yaml`; `k8s-control-plane-init.service`
+best-effort applies bundled manifests after API readiness.
 
 ```bash
 export KUBECONFIG=/etc/kubernetes/admin.conf
 sudo -E kubectl apply -f manifests/local-path-storage.yaml
 sudo -E kubectl get sc,pods -n local-path-storage
 ```
+
 
 local-path is node-local and not replicated. For durable/shared storage
 (Longhorn, NFS, Rook/Ceph) the image already includes `iscsi-initiator-utils`,
@@ -69,12 +72,23 @@ Or use Flux. Keep runtime secrets in-cluster/secret store, not in Git or images.
   `/etc/tailscale/authkey`, 0600) and is never committed/baked in.
 - Use SOPS+age, Sealed Secrets, or External Secrets Operator for cluster secrets.
 
-## KubeFlex / KubeStellar prerequisites
+## Control-plane self-healing hardening (image)
 
-KubeFlex-hosted control planes need a working default StorageClass before
-installing `ks-core`, ability to run privileged pods/mount host paths, and
-enough CPU/memory for nested control planes + Postgres. If you enable Pod
-Security Admission, exempt `kubeflex-system`/`its*`/`wds*` namespaces as needed.
+- `kubelet.service` runs `/usr/libexec/k8s-kubelet-migrate` via `ExecStartPre`
+  to strip deprecated flags (e.g. `--pod-infra-container-image`) from
+  `/var/lib/kubelet/kubeadm-flags.env` and regenerate missing control-plane
+  `/etc/kubernetes/kubelet.conf` when admin state exists.
+- `k8s-control-plane-init.service` reconciles on each boot: patches controller-manager
+  flexvolume hostPath, refreshes kubeconfig/join command, and best-effort applies
+  bundled manifests from `/usr/share/homelab/manifests` after API readiness.
+- `k8s-approve-node-csrs.timer` auto-approves pending kubelet client CSRs only for
+  `system:node:homelab-0|1|2` (or nodes listed in `/etc/kubernetes/csr-allowed-nodes`);
+  it does not approve generic bootstrap identities.
+- `/etc/crictl.yaml` points `crictl` at containerd by default.
+- Optional join-server auth: `JOIN_TOKEN`/`/etc/kubernetes/join-server.token` on
+  control-plane and workers, and `JOIN_BIND_ADDR` in `/etc/kubernetes/join-server.env`.
+  Workers remain firewall-scoped; restrict 6447/tcp to known worker sources.
+
 
 ## Registry mirrors
 

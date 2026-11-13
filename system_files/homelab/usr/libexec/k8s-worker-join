@@ -1,12 +1,15 @@
 #!/usr/bin/env bash
 # Fetch a kubeadm join command from the control plane and join this worker.
 # Control plane endpoint is read from /etc/kubernetes/node.env (CONTROL_PLANE,
-# TOKEN_PORT). Idempotent: exits if this node already joined.
+# TOKEN_PORT). Optional JOIN_TOKEN can be set in node.env or
+# /etc/kubernetes/join-server.token to authenticate to a hardened join server.
+# Idempotent: exits if this node already joined.
 
 set -euo pipefail
 
 JOIN_MARKER=/etc/kubernetes/kubelet.conf
 NODE_ENV=/etc/kubernetes/node.env
+JOIN_TOKEN_FILE=/etc/kubernetes/join-server.token
 LOG_TAG=k8s-worker-join
 
 log() { logger -t "$LOG_TAG" -- "$*"; echo "[$LOG_TAG] $*"; }
@@ -20,12 +23,22 @@ source "$NODE_ENV"
 
 CP_ADDR="${CONTROL_PLANE:-}"
 TOKEN_PORT="${TOKEN_PORT:-6447}"
+JOIN_TOKEN="${JOIN_TOKEN:-}"
 [[ -n "$CP_ADDR" ]] || die "CONTROL_PLANE is not set in $NODE_ENV"
+
+if [[ -z "$JOIN_TOKEN" && -s "$JOIN_TOKEN_FILE" ]]; then
+    JOIN_TOKEN="$(tr -d '[:space:]' < "$JOIN_TOKEN_FILE")"
+fi
 
 mkdir -p /etc/kubernetes
 
-log "fetching join command from http://${CP_ADDR}:${TOKEN_PORT}/join"
-until JOIN_CMD="$(curl -fsS --max-time 10 "http://${CP_ADDR}:${TOKEN_PORT}/join")"; do
+URL="http://${CP_ADDR}:${TOKEN_PORT}/join"
+log "fetching join command from ${URL}"
+until if [[ -n "$JOIN_TOKEN" ]]; then
+        JOIN_CMD="$(curl -fsS --max-time 10 -H "Authorization: Bearer ${JOIN_TOKEN}" "$URL")"
+      else
+        JOIN_CMD="$(curl -fsS --max-time 10 "$URL")"
+      fi; do
     log "join command not ready, retrying in 10s"
     sleep 10
 done
@@ -35,3 +48,4 @@ done
 log "running kubeadm join"
 eval "$JOIN_CMD"
 log "worker joined cluster"
+

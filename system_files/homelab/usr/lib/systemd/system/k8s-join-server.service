@@ -5,9 +5,11 @@ Wants=k8s-control-plane-init.service
 
 [Service]
 Type=simple
+EnvironmentFile=-/etc/kubernetes/join-server.env
 ExecStart=/usr/libexec/k8s-join-server
 Restart=on-failure
 RestartSec=10
+NoNewPrivileges=yes
 
 [Install]
 WantedBy=multi-user.target

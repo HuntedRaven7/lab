@@ -1,8 +1,7 @@
 [Unit]
-Description=Initialize Kubernetes control plane (kubeadm)
+Description=Initialize/reconcile Kubernetes control plane (kubeadm)
 After=network-online.target containerd.service kubelet.service
 Wants=network-online.target containerd.service kubelet.service
-ConditionPathExists=!/etc/kubernetes/admin.conf
 
 [Service]
 Type=oneshot

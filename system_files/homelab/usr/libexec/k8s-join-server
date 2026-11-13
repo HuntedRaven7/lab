@@ -2,20 +2,51 @@
 # Serve the kubeadm worker join command over HTTP.
 # Listens on port 6447 (GET /join). The join command is read from
 # /etc/kubernetes/join-command at runtime and is never baked into the image.
+#
+# Hardening (optional): if JOIN_TOKEN or /etc/kubernetes/join-server.token is
+# set/non-empty, requests must present it via ?token=<value> or
+# Authorization: Bearer <value>. BIND_ADDR defaults to 0.0.0.0; set to a
+# specific control-plane/LAN IP to reduce exposure.
 
+import hmac
 import http.server
 import os
 import sys
+from urllib.parse import parse_qs, urlparse
 
 JOIN_FILE = "/etc/kubernetes/join-command"
-PORT = 6447
+TOKEN_FILE = "/etc/kubernetes/join-server.token"
+PORT = int(os.environ.get("JOIN_PORT", "6447"))
+BIND_ADDR = os.environ.get("JOIN_BIND_ADDR", "0.0.0.0")
+
+
+def expected_token() -> str:
+    tok = os.environ.get("JOIN_TOKEN", "").strip()
+    if tok:
+        return tok
+    if os.path.isfile(TOKEN_FILE):
+        with open(TOKEN_FILE, "r", encoding="utf-8") as f:
+            return f.read().strip()
+    return ""
 
 
 class JoinHandler(http.server.BaseHTTPRequestHandler):
     def do_GET(self):
-        if self.path != "/join":
+        parsed = urlparse(self.path)
+        if parsed.path != "/join":
             self.send_error(404)
             return
+
+        token = expected_token()
+        if token:
+            provided = parse_qs(parsed.query).get("token", [""])[0]
+            auth = self.headers.get("Authorization", "")
+            if auth.startswith("Bearer "):
+                provided = auth[7:].strip() or provided
+            if not provided or not hmac.compare_digest(provided, token):
+                self.send_error(403, "forbidden")
+                return
+
         if not os.path.isfile(JOIN_FILE):
             self.send_error(503, "join command not ready")
             return
@@ -33,5 +64,5 @@ class JoinHandler(http.server.BaseHTTPRequestHandler):
 
 
 if __name__ == "__main__":
-    server = http.server.ThreadingHTTPServer(("0.0.0.0", PORT), JoinHandler)
+    server = http.server.ThreadingHTTPServer((BIND_ADDR, PORT), JoinHandler)
     server.serve_forever()

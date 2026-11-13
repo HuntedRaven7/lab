@@ -1,0 +1,40 @@
+#!/usr/bin/env bash
+# Reconcile kubelet runtime config across upgrades (idempotent).
+# - Strip deprecated kubeadm flags that can prevent kubelet from starting.
+# - Regenerate /etc/kubernetes/kubelet.conf on initialized control-plane nodes
+#   when it is missing, so static pods/kubelet can recover after image changes.
+
+set -euo pipefail
+
+KUBEADM_FLAGS=/var/lib/kubelet/kubeadm-flags.env
+NODE_ENV=/etc/kubernetes/node.env
+ADMIN_CONF=/etc/kubernetes/admin.conf
+KUBELET_CONF=/etc/kubernetes/kubelet.conf
+LOG_TAG=k8s-kubelet-migrate
+
+log() { logger -t "$LOG_TAG" -- "$*"; echo "[$LOG_TAG] $*"; }
+
+# 1) Remove kubelet flags removed in recent releases.
+if [[ -f "$KUBEADM_FLAGS" ]]; then
+    if grep -q -- '--pod-infra-container-image' "$KUBEADM_FLAGS"; then
+        cp -a "$KUBEADM_FLAGS" "${KUBEADM_FLAGS}.bak.$(date +%s)"
+        sed -i 's/[[:space:]]*--pod-infra-container-image=[^"[:space:]]*//g' "$KUBEADM_FLAGS"
+        log "removed deprecated --pod-infra-container-image from ${KUBEADM_FLAGS}"
+    fi
+fi
+
+# 2) Control-plane recovery: ensure kubelet kubeconfig exists when cluster state does.
+ROLE=""
+[[ -f "$NODE_ENV" ]] && source "$NODE_ENV" || true
+if [[ "${ROLE:-}" == "control-plane" && -f "$ADMIN_CONF" && ! -s "$KUBELET_CONF" ]]; then
+    if command -v kubeadm >/dev/null 2>&1; then
+        API_ADDR="${API_ADVERTISE_ADDRESS:-$(ip -4 route get 1.1.1.1 2>/dev/null | awk '{for (i=1; i<=NF; i++) if ($i == "src") { print $(i+1); exit }}')}"
+        if [[ -n "$API_ADDR" ]]; then
+            log "regenerating missing kubelet.conf for control-plane (${API_ADDR})"
+            kubeadm init phase kubeconfig kubelet --apiserver-advertise-address="${API_ADDR}" || \
+                log "warning: failed to regenerate kubelet.conf"
+        fi
+    fi
+fi
+
+exit 0

@@ -138,7 +138,14 @@ Access: `sudo kubectl -n kubestellar-console port-forward svc/kc-kubestellar-con
 - homelab-1/2: set `CONTROL_PLANE` (and optional `TOKEN_PORT`) in
   `/etc/kubernetes/node.env` if needed, then `k8s-worker-join.service` fetches
   and runs `kubeadm join` (idempotent once joined).
-- Join endpoint is unauthenticated HTTP; restrict 6447/tcp to trusted workers.
+- Hardening knobs (opt-in, runtime files): set `JOIN_TOKEN` in
+  `/etc/kubernetes/join-server.env` (control-plane) and provide the same value to
+  workers via `/etc/kubernetes/join-server.token` or `JOIN_TOKEN` in
+  `/etc/kubernetes/node.env`; optionally set `JOIN_BIND_ADDR` in
+  `/etc/kubernetes/join-server.env` to bind a specific interface/IP.
+- `6447/tcp` is opened by default only on node 0 image builds, but treat it as
+  sensitive: restrict source to known workers (zone/rich rule) and keep join
+  tokens/`/etc/kubernetes/join-command` protected (0600).
 - If a worker must rejoin, reset its Kubernetes state (`kubeadm reset -f`,
   remove `/etc/kubernetes/*`, `/var/lib/kubelet`, CNI state as appropriate) and
   let the join service run again, or re-image.

@@ -1,0 +1,11 @@
+[Unit]
+Description=Periodically auto-approve pending kubelet client CSRs
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=2min
+Unit=k8s-approve-node-csrs.service
+Persistent=true
+
+[Install]
+WantedBy=timers.target

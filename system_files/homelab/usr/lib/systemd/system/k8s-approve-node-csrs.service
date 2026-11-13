@@ -1,0 +1,16 @@
+[Unit]
+Description=Auto-approve pending kubelet client CSRs for homelab nodes
+After=network-online.target kubelet.service k8s-control-plane-init.service
+Wants=network-online.target
+ConditionPathExists=/etc/kubernetes/admin.conf
+
+[Service]
+Type=oneshot
+ExecStart=/usr/libexec/k8s-approve-node-csrs
+RemainAfterExit=no
+Restart=on-failure
+RestartSec=30
+TimeoutStartSec=10min
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,63 @@
+#!/usr/bin/env bash
+# Auto-approve pending kubelet client CSRs for known homelab nodes (best-effort).
+# Hardening: only approves exact node identities homelab-0/1/2 (or an explicit
+# allowlist in /etc/kubernetes/csr-allowed-nodes, one name per line). Does NOT
+# auto-approve generic bootstrap-token identities.
+
+set -euo pipefail
+
+ADMIN_CONF=/etc/kubernetes/admin.conf
+ALLOW_FILE=/etc/kubernetes/csr-allowed-nodes
+LOG_TAG=k8s-approve-node-csrs
+
+log() { logger -t "$LOG_TAG" -- "$*"; echo "[$LOG_TAG] $*"; }
+
+[[ -f "$ADMIN_CONF" ]] || exit 0
+command -v kubectl >/dev/null 2>&1 || exit 0
+
+export KUBECONFIG="$ADMIN_CONF"
+
+# Wait briefly for API readiness.
+for _ in $(seq 1 30); do
+    kubectl get --raw='/readyz' >/dev/null 2>&1 && break
+    sleep 5
+done
+
+kubectl get --raw='/readyz' >/dev/null 2>&1 || exit 0
+
+is_allowed_node_user() {
+    local user="$1"
+    local node
+    case "$user" in
+        system:node:homelab-0|system:node:homelab-1|system:node:homelab-2) return 0 ;;
+    esac
+    if [[ -f "$ALLOW_FILE" ]]; then
+        node="${user#system:node:}"
+        [[ "$node" != "$user" ]] || return 1
+        grep -qxF "$node" "$ALLOW_FILE" 2>/dev/null && return 0
+    fi
+    return 1
+}
+
+mapfile -t CSRS < <(kubectl get csr -o jsonpath='{range .items[?(@.status.conditions==null || @.status.conditions[*].type!="Approved")]}{.metadata.name}{"\t"}{.spec.signerName}{"\t"}{.spec.username}{"\n"}{end}' 2>/dev/null || true)
+
+approved=0
+for line in "${CSRS[@]}"; do
+    [[ -n "$line" ]] || continue
+    name="${line%%$'\t'*}"
+    rest="${line#*$'\t'}"
+    signer="${rest%%$'\t'*}"
+    user="${rest#*$'\t'}"
+    [[ "$signer" == "kubernetes.io/kube-apiserver-client-kubelet" ]] || continue
+    if is_allowed_node_user "$user"; then
+        if kubectl certificate approve "$name" >/dev/null 2>&1; then
+            log "approved CSR ${name} (${user})"
+            approved=$((approved + 1))
+        fi
+    else
+        log "skipping CSR ${name} for unapproved identity (${user}, ${signer})"
+    fi
+done
+
+[[ $approved -eq 0 ]] || log "approved ${approved} CSR(s)"
+exit 0
