@@ -8,7 +8,7 @@
 
 set -euo pipefail
 
-K8S_MINOR="1.34" # renovate: datasource=github-releases depName=kubernetes/kubernetes extractVersion=^v(?<version>\d+\.\d+)\.\d+$
+K8S_MINOR="1.37" # renovate: datasource=github-releases depName=kubernetes/kubernetes extractVersion=^v(?<version>\d+\.\d+)\.\d+$
 ETCD_VERSION="v3.7.3" # renovate: datasource=github-releases depName=etcd-io/etcd
 CLUSTERADM_VERSION="0.10.1" # renovate: datasource=github-releases depName=open-cluster-management-io/clusteradm extractVersion=^v(?<version>.*)$
 
