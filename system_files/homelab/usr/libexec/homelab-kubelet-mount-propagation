@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Make the kubelet root a shared mount so CSI drivers can use bidirectional
-# mount propagation (Longhorn, NFS, iSCSI, etc.). Runs before k0s.
+# mount propagation (Longhorn, NFS, iSCSI, etc.). Runs before kubelet.
 set -euo pipefail
 
 KUBELET_ROOT=/var/lib/kubelet

@@ -2,11 +2,11 @@
 
 set -ouex pipefail
 
-# Copy shared homelab system files (k0s units, token services, configs).
+# Copy shared homelab system files (k8s units, configs, helpers).
 cp -avf "/ctx/system_files"/. /
 
 # Fedora stack: base tools. Podman is kept for ad-hoc debugging, but all
-# workloads run on k0s/Kubernetes (KubeStellar). k0s uses containerd.
+# workloads run on Kubernetes. containerd is the CRI runtime.
 dnf5 install -y tmux \
 	git \
 	firewalld \
@@ -24,8 +24,6 @@ dnf5 install -y tmux \
 	iscsi-initiator-utils \
 	nfs-utils \
 	cifs-utils \
-	device-mapper \
-	cryptsetup \
 	wireguard-tools \
 	NetworkManager-wifi \
 	container-selinux \
@@ -38,18 +36,27 @@ dnf5 install -y tmux \
 
 dnf5 install -y 'dnf5-command(config-manager)'
 
-# Ensure runtime directories exist (bootc images may have /var as tmpfs in
-# some layouts; systemd-tmpfiles will recreate on boot, but be explicit).
-mkdir -p /etc/k0s /var/lib/k0s /etc/homelab /etc/homelab/secrets /var/lib/homelab \
-    /var/lib/cni/bin /etc/cni/net.d /var/lib/homelab/local-path /var/lib/kubelet /var/backups/k0s
+# Ensure runtime directories exist (bootc: /var is stateful; tmpfiles recreates).
+mkdir -p /etc/kubernetes /etc/kubernetes/manifests /etc/containerd /etc/tailscale \
+    /var/lib/etcd /var/lib/kubelet /var/lib/containerd /var/lib/tailscale \
+    /var/lib/homebrew /var/lib/homebrew-state \
+    /var/lib/cni/bin /etc/cni/net.d /var/lib/homelab /var/lib/homelab/local-path \
+    /var/lib/homelab/helm /var/backups/etcd
 
-# tmpfiles rules for runtime dirs (bootc: /var stateful, root immutable).
-# CNI binaries live under /var because /opt/cni/bin is read-only on bootc;
-# the paths are set in /etc/k0s/containerd.d/10-cni-paths.toml.
+# tmpfiles rules for runtime dirs (bootc: root immutable).
+# CNI binaries live under /var because /opt/cni/bin is read-only on bootc.
 install -d -m 0755 /usr/lib/tmpfiles.d
-cat > /usr/lib/tmpfiles.d/homelab.conf <<'EOF'
-d /etc/homelab 0755 root root -
-d /etc/homelab/secrets 0700 root root -
+cat > /usr/lib/tmpfiles.d/kubernetes-node.conf <<'EOF'
+d /etc/kubernetes 0755 root root -
+d /etc/kubernetes/manifests 0755 root root -
+d /etc/containerd 0755 root root -
+d /etc/tailscale 0700 root root -
+d /var/lib/tailscale 0700 root root -
+d /var/lib/etcd 0700 root root -
+d /var/lib/kubelet 0755 root root -
+d /var/lib/containerd 0755 root root -
+d /var/lib/homebrew 0755 root root -
+d /var/lib/homebrew-state 0755 root root -
 d /var/lib/homelab 0755 root root -
 d /var/lib/homelab/helm 0700 root root -
 d /var/lib/homelab/local-path 0755 root root -
@@ -57,20 +64,14 @@ d /var/lib/cni 0755 root root -
 d /var/lib/cni/bin 0755 root root -
 d /etc/cni 0755 root root -
 d /etc/cni/net.d 0755 root root -
-d /var/lib/kubelet 0755 root root -
-d /var/backups/k0s 0700 root root -
-# Restore SELinux labels for hostPath dirs written by pods/CSI on an enforcing
-# bootc host (Cilium CNI install, local-path helper pods). The default context
-# for these paths is set with semanage fcontext below; Z restores it at boot.
+d /var/backups/etcd 0700 root root -
+# Restore SELinux labels for hostPath dirs written by pods/CSI on enforcing hosts.
 Z /var/lib/cni/bin - - - -
 Z /etc/cni/net.d - - - -
-# Only the top-level local-path dir: relabelling entire PVC trees on every
-# boot is slow. New files inherit container_file_t from the parent directory.
 z /var/lib/homelab/local-path - - - -
 EOF
 
-# Label the hostPath dirs as container_file_t so pod writes are allowed under
-# SELinux enforcing. The tmpfiles Z rules above re-apply these at boot.
+# Label hostPath dirs as container_file_t for SELinux enforcing.
 if command -v semanage >/dev/null 2>&1; then
     semanage fcontext -a -t container_file_t '/var/lib/cni/bin(/.*)?' || true
     semanage fcontext -a -t container_file_t '/etc/cni/net.d(/.*)?' || true
@@ -78,26 +79,35 @@ if command -v semanage >/dev/null 2>&1; then
     restorecon -RF /var/lib/cni/bin /etc/cni/net.d /var/lib/homelab/local-path || true
 fi
 
-# Make homelab helper scripts executable.
-chmod +x /usr/libexec/homelab-k0s-token \
-         /usr/libexec/homelab-k0s-token-server \
-         /usr/libexec/homelab-k0s-join \
+# Make helper scripts executable.
+chmod +x /usr/libexec/k8s-control-plane-init \
+         /usr/libexec/k8s-worker-join \
+         /usr/libexec/k8s-join-server \
+         /usr/libexec/k8s-etcd-backup \
          /usr/libexec/homelab-kubelet-mount-propagation \
-         /usr/libexec/homelab-tailscale-auth \
-         /usr/libexec/homelab-etcd-backup
+         /usr/libexec/homelab-tailscale-auth
 
-# Base services: firewalld for node security; podman.socket kept for debugging.
+# Base services.
 systemctl enable firewalld.service
 systemctl disable podman.socket
 systemctl enable sshd.service
+systemctl enable containerd.service
+systemctl enable kubelet.service
+mkdir -p /etc/systemd/system/multi-user.target.wants
+ln -sf /run/systemd/generator/tailscaled.service /etc/systemd/system/multi-user.target.wants/tailscaled.service
 
 # CSI volume propagation + optional Tailscale first-boot auth.
 systemctl enable homelab-kubelet-mount-propagation.service
 systemctl enable homelab-tailscale-auth.service
 
-# Kubernetes nodes do not want zram swap; the zram-generator config also
-# disables it, mask the unit as a belt-and-braces measure.
+# Kubernetes nodes do not want zram swap.
 systemctl mask systemd-zram-setup@zram0.service || true
-   
+
+# Remove unneeded VM guest, desktop/UX, and audio/misc packages (if present).
+mapfile -t INSTALLED_REMOVE < <(rpm -qa --qf '%{NAME}\n' | grep -E '^(qemu-guest-agent|spice-vdagent|spice-webdavd|open-vm-tools|open-vm-tools-desktop|virtualbox-guest-additions|hyperv-daemons|hypervfcopyd|hypervkvpd|hypervvssd|WALinuxAgent|plymouth|plymouth-.*|PackageKit.*|cockpit.*|realmd|adcli|teamd|ModemManager|alsa-firmware|alsa-sof-firmware|alsa-utils|pipewire.*|pulseaudio.*|wireplumber.*)$' || true)
+if ((${#INSTALLED_REMOVE[@]})); then
+    dnf5 remove -y "${INSTALLED_REMOVE[@]}"
+fi
+
 # [IM]MUTABLE /opt
 rm -rf /opt && mkdir /opt

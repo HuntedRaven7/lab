@@ -1,0 +1,13 @@
+[Unit]
+Description=Serve kubeadm worker join command
+After=network-online.target k8s-control-plane-init.service
+Wants=k8s-control-plane-init.service
+
+[Service]
+Type=simple
+ExecStart=/usr/libexec/k8s-join-server
+Restart=on-failure
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target

@@ -48,3 +48,5 @@ rm -f "${flathub_tmp}"
 # Services
 systemctl enable podman
 systemctl enable gdm
+mkdir -p /etc/systemd/system/multi-user.target.wants
+ln -sf /run/systemd/generator/tailscaled.service /etc/systemd/system/multi-user.target.wants/tailscaled.service

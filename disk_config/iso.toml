@@ -7,7 +7,7 @@ bootc switch --mutate-in-place --transport registry ghcr.io/huntedraven7/homelab
 
 # NOTE: Anaconda owns partitioning for the ISO install, so
 # disk_config/disk.toml's filesystem entries do not apply here. Create a
-# separate /var (30 GiB+) during installation; k0s etcd, containerd images and
+# separate /var (30 GiB+) during installation; etcd, containerd images and
 # PVCs all live under /var.
 
 [customizations.installer.modules]

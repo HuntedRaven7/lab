@@ -111,9 +111,15 @@ build $target_image=image_name $tag=default_tag:
     fi
 
     # Use a dedicated Containerfile when one exists
-    CONTAINERFILE="images/Containerfile"
-    if [[ -f "images/Containerfile.${IMAGE_BASENAME}" ]]; then
-        CONTAINERFILE="images/Containerfile.${IMAGE_BASENAME}"
+    CONTAINERFILE="Containerfile"
+    if [[ -f "Containerfile.${IMAGE_BASENAME}" ]]; then
+        CONTAINERFILE="Containerfile.${IMAGE_BASENAME}"
+    fi
+    # Homelab base and nodes are staged targets in Containerfile.homelab
+    BUILD_TARGET_ARGS=()
+    if [[ "${IMAGE_BASENAME}" == "homelab" || "${IMAGE_BASENAME}" =~ ^homelab-[0-9]+$ ]]; then
+        CONTAINERFILE="Containerfile.homelab"
+        BUILD_TARGET_ARGS+=("--target" "${IMAGE_BASENAME}")
     fi
 
     BUILD_ARGS=()
@@ -149,7 +155,7 @@ build $target_image=image_name $tag=default_tag:
     fi
 
     # This actually builds the image!
-    PODMAN_BUILD_ARGS=("${BUILD_ARGS[@]}" "${EXTRA_BUILD_ARGS[@]}" "${LABELS[@]}" --pull=newer --tag "${target_image}:${tag}" --file "${CONTAINERFILE}")
+    PODMAN_BUILD_ARGS=("${BUILD_ARGS[@]}" "${EXTRA_BUILD_ARGS[@]}" "${BUILD_TARGET_ARGS[@]}" "${LABELS[@]}" --pull=newer --tag "${target_image}:${tag}" --file "${CONTAINERFILE}")
 
     podman build "${PODMAN_BUILD_ARGS[@]}" .
 

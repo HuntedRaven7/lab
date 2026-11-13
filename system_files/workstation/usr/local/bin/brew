@@ -1,0 +1,30 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+IMAGE="${BREW_IMAGE:-ghcr.io/homebrew/brew:latest}"
+PREFIX="${BREW_PREFIX:-/var/lib/homebrew}"
+STATE="${BREW_STATE:-/var/lib/homebrew-state}"
+
+mkdir -p "$PREFIX" "$STATE"
+
+tty_args=()
+if [[ -t 0 && -t 1 ]]; then
+  tty_args=(-t)
+fi
+
+run_args=(
+  --rm -i "${tty_args[@]}"
+  --pull=newer
+  --security-opt label=disable
+  -e HOMEBREW_NO_AUTO_UPDATE=1
+  -e HOMEBREW_NO_ANALYTICS=1
+  -v "$PREFIX:/home/linuxbrew/.linuxbrew"
+  -v "$STATE:/home/linuxbrew/.cache"
+)
+
+# Mount current working directory when available for local installs/builds.
+if [[ -d "$PWD" ]]; then
+  run_args+=(-v "$PWD:$PWD" -w "$PWD")
+fi
+
+exec podman run "${run_args[@]}" "$IMAGE" brew "$@"

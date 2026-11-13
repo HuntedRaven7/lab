@@ -1,44 +1,38 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
-  "extends": [
-    "config:best-practices"
-  ],
+  "extends": ["config:best-practices"],
   "rebaseWhen": "never",
   "customManagers": [
     {
       "customType": "regex",
-      "description": "Track k0s version in build scripts (vX.Y.Z+k0s.N releases)",
-      "managerFilePatterns": [
-        "/(^|/)build_files/k0s\\.sh$/"
-      ],
-      "matchStrings": [
-        "K0S_VERSION=\"(?<currentValue>v[^\"]+)\""
-      ],
+      "description": "Track Kubernetes minor version for pkgs.k8s.io repo in k8s build script",
+      "managerFilePatterns": ["/(^|/)build_files/k8s\\.sh$/"],
+      "matchStrings": ["K8S_MINOR=\"(?<currentValue>\\d+\\.\\d+)\""],
       "datasourceTemplate": "github-releases",
-      "depNameTemplate": "k0sproject/k0s",
-      "versioningTemplate": "regex:^v?(?<major>\\d+)\\.(?<minor>\\d+)\\.(?<patch>\\d+)\\+k0s\\.(?<build>\\d+)$"
+      "depNameTemplate": "kubernetes/kubernetes",
+      "extractVersionTemplate": "^v(?<version>\\d+\\.\\d+)\\.\\d+$"
     },
     {
       "customType": "regex",
-      "description": "Track Helm binary version in build scripts",
-      "managerFilePatterns": [
-        "/(^|/)build_files/k0s\\.sh$/"
-      ],
-      "matchStrings": [
-        "get-helm-3[\\s\\S]*?--version (?<currentValue>v[0-9.]+)"
-      ],
+      "description": "Track etcd version in k8s build script",
+      "managerFilePatterns": ["/(^|/)build_files/k8s\\.sh$/"],
+      "matchStrings": ["ETCD_VERSION=\"(?<currentValue>v[^\"]+)\""],
+      "datasourceTemplate": "github-releases",
+      "depNameTemplate": "etcd-io/etcd"
+    },
+    {
+      "customType": "regex",
+      "description": "Track Helm binary version in k8s build script",
+      "managerFilePatterns": ["/(^|/)build_files/k8s\\.sh$/"],
+      "matchStrings": ["DESIRED_VERSION=(?<currentValue>v[0-9.]+)"],
       "datasourceTemplate": "github-releases",
       "depNameTemplate": "helm/helm"
     },
     {
       "customType": "regex",
-      "description": "Track clusteradm (OCM CLI) version in build scripts; pinned <0.11 for KubeStellar",
-      "managerFilePatterns": [
-        "/(^|/)build_files/k0s\\.sh$/"
-      ],
-      "matchStrings": [
-        "CLUSTERADM_VERSION=\"(?<currentValue>[^\"]+)\""
-      ],
+      "description": "Track clusteradm (OCM CLI) version in k8s build script; pinned <0.11 for KubeStellar",
+      "managerFilePatterns": ["/(^|/)build_files/k8s\\.sh$/"],
+      "matchStrings": ["CLUSTERADM_VERSION=\"(?<currentValue>[^\"]+)\""],
       "datasourceTemplate": "github-releases",
       "depNameTemplate": "open-cluster-management-io/clusteradm",
       "extractVersionTemplate": "^v(?<version>.*)$"
@@ -47,31 +41,17 @@
   "packageRules": [
     {
       "automerge": true,
-      "matchUpdateTypes": [
-        "pin",
-        "pinDigest"
-      ]
+      "matchUpdateTypes": ["pin", "pinDigest"]
     },
     {
       "enabled": false,
-      "matchUpdateTypes": [
-        "digest",
-        "pinDigest",
-        "pin"
-      ],
-      "matchDepTypes": [
-        "container"
-      ],
-      "matchFileNames": [
-        ".github/workflows/**.yaml",
-        ".github/workflows/**.yml"
-      ]
+      "matchUpdateTypes": ["digest", "pinDigest", "pin"],
+      "matchDepTypes": ["container"],
+      "matchFileNames": [".github/workflows/**.yaml", ".github/workflows/**.yml"]
     },
     {
       "description": "clusteradm pinned <0.11 for KubeStellar OCM compatibility",
-      "matchDepNames": [
-        "open-cluster-management-io/clusteradm"
-      ],
+      "matchDepNames": ["open-cluster-management-io/clusteradm"],
       "allowedVersions": "< 0.11"
     }
   ]

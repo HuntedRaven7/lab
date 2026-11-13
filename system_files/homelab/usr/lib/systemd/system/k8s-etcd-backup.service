@@ -1,0 +1,10 @@
+[Unit]
+Description=Back up Kubernetes etcd snapshot
+After=kubelet.service
+ConditionPathExists=/etc/kubernetes/admin.conf
+
+[Service]
+Type=oneshot
+ExecStart=/usr/libexec/k8s-etcd-backup
+Nice=10
+IOSchedulingClass=idle

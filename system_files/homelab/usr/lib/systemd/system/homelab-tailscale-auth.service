@@ -3,7 +3,8 @@ Description=Bring Tailscale up with a first-boot auth key
 Documentation=https://tailscale.com/kb/1085/auth-keys/
 After=network-online.target tailscaled.service
 Wants=network-online.target tailscaled.service
-ConditionPathExists=/etc/homelab/secrets/tailscale-authkey
+Requires=tailscaled.service
+ConditionPathExists=/etc/tailscale/authkey
 
 [Service]
 Type=oneshot

@@ -1,0 +1,33 @@
+#!/usr/bin/env bash
+# Back up Kubernetes/etcd state to /var/backups/etcd and keep the newest 7.
+# Uses an etcdctl snapshot from the local stacked-etcd static pod certs/keys.
+# Recovery path for the single control plane (homelab-0).
+
+set -euo pipefail
+
+DEST=/var/backups/etcd
+ETCD_CACERT=/etc/kubernetes/pki/etcd/ca.crt
+ETCD_CERT=/etc/kubernetes/pki/etcd/server.crt
+ETCD_KEY=/etc/kubernetes/pki/etcd/server.key
+
+mkdir -p "$DEST"
+chmod 0700 "$DEST"
+
+systemctl is-active --quiet kubelet.service || exit 0
+[[ -f /etc/kubernetes/admin.conf && -f "$ETCD_CACERT" ]] || exit 0
+
+SNAP="${DEST}/etcd-snapshot-$(date -u +%Y%m%dT%H%M%SZ).db"
+ETCDCTL_API=3 etcdctl \
+  --endpoints=https://127.0.0.1:2379 \
+  --cacert="$ETCD_CACERT" \
+  --cert="$ETCD_CERT" \
+  --key="$ETCD_KEY" \
+  snapshot save "$SNAP"
+
+find "$DEST" -maxdepth 1 -type f -name 'etcd-snapshot-*' -printf '%T@ %p\n' \
+    | sort -n \
+    | head -n -7 \
+    | cut -d' ' -f2- \
+    | xargs -r rm -f
+
+echo "etcd backup complete: $(find "$DEST" -maxdepth 1 -type f -name 'etcd-snapshot-*' | wc -l) backup(s) retained"

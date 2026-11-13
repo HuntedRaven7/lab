@@ -2,7 +2,7 @@
 Description=Make /var/lib/kubelet a shared mount (CSI volume propagation)
 Documentation=https://kubernetes.io/docs/concepts/storage/volumes/#mount-propagation
 After=local-fs.target
-Before=k0scontroller.service k0sworker.service
+Before=kubelet.service
 ConditionPathIsDirectory=/var/lib/kubelet
 
 [Service]

@@ -1,0 +1,27 @@
+[Unit]
+Description=Tailscale (Podman Quadlet)
+After=network-online.target
+Wants=network-online.target
+
+[Container]
+Image=docker.io/tailscale/tailscale:stable
+ContainerName=tailscaled
+HostName=%H
+Network=host
+AddCapability=NET_ADMIN
+AddCapability=NET_RAW
+AddDevice=/dev/net/tun:/dev/net/tun
+Volume=/var/lib/tailscale:/var/lib/tailscale:Z
+Volume=/dev/net/tun:/dev/net/tun
+Volume=/etc/tailscale:/etc/tailscale:ro,Z
+Environment=TS_STATE_DIR=/var/lib/tailscale
+Environment=TS_USERSPACE=false
+Environment=TS_AUTH_ONCE=true
+
+[Service]
+Restart=always
+RestartSec=5
+TimeoutStartSec=900
+
+[Install]
+WantedBy=multi-user.target

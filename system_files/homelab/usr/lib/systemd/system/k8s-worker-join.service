@@ -1,0 +1,17 @@
+[Unit]
+Description=Fetch kubeadm join command and join the cluster
+After=network-online.target containerd.service kubelet.service
+Wants=network-online.target containerd.service kubelet.service
+ConditionPathExists=!/etc/kubernetes/kubelet.conf
+ConditionPathExists=/etc/kubernetes/node.env
+
+[Service]
+Type=oneshot
+ExecStart=/usr/libexec/k8s-worker-join
+RemainAfterExit=yes
+Restart=on-failure
+RestartSec=15
+StartLimitInterval=0
+
+[Install]
+WantedBy=multi-user.target

@@ -6,8 +6,8 @@
 #   * the StorageClass is marked as the cluster default
 #
 # The host directory is created and SELinux-labelled by
-# /usr/lib/tmpfiles.d/homelab.conf at boot (container_file_t). Deploy with:
-#   sudo k0s kubectl apply -f manifests/local-path-storage.yaml
+# /usr/lib/tmpfiles.d/kubernetes-node.conf at boot (container_file_t). Deploy with:
+#   sudo kubectl apply -f manifests/local-path-storage.yaml
 #
 apiVersion: v1
 kind: Namespace
