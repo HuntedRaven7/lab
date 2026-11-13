@@ -50,3 +50,7 @@ systemctl enable podman
 systemctl enable gdm
 mkdir -p /etc/systemd/system/multi-user.target.wants
 ln -sf /run/systemd/generator/tailscaled.service /etc/systemd/system/multi-user.target.wants/tailscaled.service
+
+# Ensure brew wrapper is on a standard PATH
+chmod +x /usr/local/bin/brew /usr/local/bin/tailscale 2>/dev/null || true
+ln -sf /usr/local/bin/brew /usr/bin/brew

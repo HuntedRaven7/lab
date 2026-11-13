@@ -17,6 +17,7 @@ Volume=/etc/tailscale:/etc/tailscale:ro,Z
 Environment=TS_STATE_DIR=/var/lib/tailscale
 Environment=TS_USERSPACE=false
 Environment=TS_AUTH_ONCE=true
+SecurityLabelDisable=true
 
 [Service]
 Restart=always

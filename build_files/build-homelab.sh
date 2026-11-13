@@ -86,6 +86,8 @@ chmod +x /usr/libexec/k8s-control-plane-init \
          /usr/libexec/k8s-etcd-backup \
          /usr/libexec/homelab-kubelet-mount-propagation \
          /usr/libexec/homelab-tailscale-auth
+chmod +x /usr/local/bin/brew /usr/local/bin/tailscale 2>/dev/null || true
+ln -sf /usr/local/bin/brew /usr/bin/brew
 
 # Base services.
 systemctl enable firewalld.service
