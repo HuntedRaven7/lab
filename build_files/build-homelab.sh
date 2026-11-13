@@ -38,10 +38,16 @@ dnf5 install -y 'dnf5-command(config-manager)'
 
 # Ensure runtime directories exist (bootc: /var is stateful; tmpfiles recreates).
 mkdir -p /etc/kubernetes /etc/kubernetes/manifests /etc/containerd /etc/tailscale \
-    /var/lib/etcd /var/lib/kubelet /var/lib/containerd /var/lib/tailscale \
+    /var/lib/etcd /var/lib/kubelet /var/lib/kubelet/volumeplugins /var/lib/containerd /var/lib/tailscale \
     /var/lib/homebrew /var/lib/homebrew-state \
     /var/lib/cni/bin /etc/cni/net.d /var/lib/homelab /var/lib/homelab/local-path \
     /var/lib/homelab/helm /var/backups/etcd
+
+# Flexvolume plugin dir must be writable on bootc (root is immutable). Symlink the
+# default path used by kube-controller-manager to state under /var.
+mkdir -p /usr/libexec/kubernetes/kubelet-plugins/volume
+rm -rf /usr/libexec/kubernetes/kubelet-plugins/volume/exec
+ln -s /var/lib/kubelet/volumeplugins /usr/libexec/kubernetes/kubelet-plugins/volume/exec
 
 # tmpfiles rules for runtime dirs (bootc: root immutable).
 # CNI binaries live under /var because /opt/cni/bin is read-only on bootc.
@@ -54,6 +60,7 @@ d /etc/tailscale 0700 root root -
 d /var/lib/tailscale 0700 root root -
 d /var/lib/etcd 0700 root root -
 d /var/lib/kubelet 0755 root root -
+d /var/lib/kubelet/volumeplugins 0755 root root -
 d /var/lib/containerd 0755 root root -
 d /var/lib/homebrew 0755 root root -
 d /var/lib/homebrew-state 0755 root root -

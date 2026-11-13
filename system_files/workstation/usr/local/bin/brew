@@ -7,6 +7,14 @@ STATE="${BREW_STATE:-/var/lib/homebrew-state}"
 
 mkdir -p "$PREFIX" "$STATE"
 
+# Initialize persistent prefix from the image on first use (bind-mounting an
+# empty dir over /home/linuxbrew/.linuxbrew would hide the image's brew install).
+if [ ! -x "$PREFIX/bin/brew" ]; then
+  podman run --rm --pull=newer --security-opt label=disable --user 0:0 \
+    -v "$PREFIX:/mnt/prefix" "$IMAGE" \
+    sh -c 'cp -a /home/linuxbrew/.linuxbrew/. /mnt/prefix/ && chown -R 1000:1000 /mnt/prefix/ 2>/dev/null || true'
+fi
+
 tty_args=()
 if [[ -t 0 && -t 1 ]]; then
   tty_args=(-t)
@@ -18,6 +26,8 @@ run_args=(
   --security-opt label=disable
   -e HOMEBREW_NO_AUTO_UPDATE=1
   -e HOMEBREW_NO_ANALYTICS=1
+  -e HOME=/home/linuxbrew
+  -e PATH=/home/linuxbrew/.linuxbrew/bin:/home/linuxbrew/.linuxbrew/sbin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
   -v "$PREFIX:/home/linuxbrew/.linuxbrew"
   -v "$STATE:/home/linuxbrew/.cache"
 )
@@ -27,4 +37,4 @@ if [[ -d "$PWD" ]]; then
   run_args+=(-v "$PWD:$PWD" -w "$PWD")
 fi
 
-exec podman run "${run_args[@]}" "$IMAGE" brew "$@"
+exec podman run "${run_args[@]}" "$IMAGE" /home/linuxbrew/.linuxbrew/bin/brew "$@"

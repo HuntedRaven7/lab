@@ -27,6 +27,12 @@ kubeadm init \
   --service-cidr=10.96.0.0/12 \
   --skip-phases=addon/kube-proxy
 
+# bootc root is immutable: controller-manager must use a writable flexvolume path.
+CM_MANIFEST=/etc/kubernetes/manifests/kube-controller-manager.yaml
+if [[ -f "$CM_MANIFEST" ]]; then
+  sed -i 's|path: /usr/libexec/kubernetes/kubelet-plugins/volume/exec|path: /var/lib/kubelet/volumeplugins|' "$CM_MANIFEST"
+fi
+
 # Kubeconfig for local admin/root convenience.
 install -d -m 0700 /root/.kube
 install -m 0600 /etc/kubernetes/admin.conf /root/.kube/config
