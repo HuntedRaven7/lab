@@ -47,7 +47,7 @@ rm -rf /tmp/etcd.tar.gz "/tmp/etcd-${ETCD_VERSION}-linux-${ARCH}"
 
 # Helm (standalone binary, used for Cilium/MetalLB/KubeStellar installs).
 curl -fsSL https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 \
-    | DESIRED_VERSION=v3.18.0 bash # renovate: datasource=github-releases depName=helm/helm
+    | DESIRED_VERSION=v3.22.1 bash # renovate: datasource=github-releases depName=helm/helm
 
 # OCM CLI for KubeStellar WEC registration.
 curl -fsSL "https://github.com/open-cluster-management-io/clusteradm/releases/download/v${CLUSTERADM_VERSION}/clusteradm_linux_${ARCH}.tar.gz" \
