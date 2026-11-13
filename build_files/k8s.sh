@@ -35,7 +35,8 @@ rm -f /etc/yum.repos.d/kubernetes.repo
 mkdir -p /etc/containerd /var/lib/cni/bin /etc/cni/net.d
 containerd config default > /etc/containerd/config.toml
 sed -i 's/SystemdCgroup = false/SystemdCgroup = true/' /etc/containerd/config.toml
-sed -i 's|bin_dir = "/opt/cni/bin"|bin_dir = "/var/lib/cni/bin"|' /etc/containerd/config.toml
+# containerd 1.x: bin_dir = "/opt/cni/bin"; containerd 2.x: bin_dirs = ['/opt/cni/bin']
+sed -i 's|/opt/cni/bin|/var/lib/cni/bin|g' /etc/containerd/config.toml
 sed -i 's|conf_dir = "/etc/cni/net.d"|conf_dir = "/etc/cni/net.d"|' /etc/containerd/config.toml
 
 # etcdctl for local stacked-etcd snapshot backups on the control plane.
