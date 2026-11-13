@@ -1,0 +1,15 @@
+#!/usr/bin/env bash
+# Make the kubelet root a shared mount so CSI drivers can use bidirectional
+# mount propagation (Longhorn, NFS, iSCSI, etc.). Runs before kubelet.
+set -euo pipefail
+
+KUBELET_ROOT=/var/lib/kubelet
+
+mkdir -p "$KUBELET_ROOT"
+
+# A plain directory must be a mountpoint before --make-rshared has any effect.
+if ! mountpoint -q "$KUBELET_ROOT"; then
+    mount --bind "$KUBELET_ROOT" "$KUBELET_ROOT"
+fi
+
+mount --make-rshared "$KUBELET_ROOT"

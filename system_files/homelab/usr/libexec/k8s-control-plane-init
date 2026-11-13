@@ -1,0 +1,44 @@
+#!/usr/bin/env bash
+# Initialize the Kubernetes control plane on homelab-0 (idempotent).
+# Writes a worker join command to /etc/kubernetes/join-command for the token
+# server. Runtime state lives under /etc/kubernetes and /var/lib/etcd.
+
+set -euo pipefail
+
+JOIN_FILE=/etc/kubernetes/join-command
+NODE_ENV=/etc/kubernetes/node.env
+LOG_TAG=k8s-control-plane-init
+
+log() { logger -t "$LOG_TAG" -- "$*"; echo "[$LOG_TAG] $*"; }
+
+[[ -f /etc/kubernetes/admin.conf ]] && { log "control plane already initialized"; exit 0; }
+[[ -f "$NODE_ENV" ]] && source "$NODE_ENV"
+
+mkdir -p /etc/kubernetes
+
+API_ADDR="${API_ADVERTISE_ADDRESS:-$(ip -4 route get 1.1.1.1 2>/dev/null | awk '{for (i=1; i<=NF; i++) if ($i == "src") { print $(i+1); exit }}')}"
+[[ -n "$API_ADDR" ]] || { log "unable to determine API address"; exit 1; }
+
+log "running kubeadm init (apiserver-advertise-address=${API_ADDR})"
+kubeadm init \
+  --apiserver-advertise-address="${API_ADDR}" \
+  --control-plane-endpoint="${API_ADDR}" \
+  --pod-network-cidr=10.244.0.0/16 \
+  --service-cidr=10.96.0.0/12 \
+  --skip-phases=addon/kube-proxy
+
+# bootc root is immutable: controller-manager must use a writable flexvolume path.
+CM_MANIFEST=/etc/kubernetes/manifests/kube-controller-manager.yaml
+if [[ -f "$CM_MANIFEST" ]]; then
+  sed -i 's|path: /usr/libexec/kubernetes/kubelet-plugins/volume/exec|path: /var/lib/kubelet/volumeplugins|' "$CM_MANIFEST"
+fi
+
+# Kubeconfig for local admin/root convenience.
+install -d -m 0700 /root/.kube
+install -m 0600 /etc/kubernetes/admin.conf /root/.kube/config
+
+kubeadm token create --print-join-command > "${JOIN_FILE}.tmp"
+chmod 0600 "${JOIN_FILE}.tmp"
+mv "${JOIN_FILE}.tmp" "$JOIN_FILE"
+
+log "control plane initialized"

@@ -1,0 +1,16 @@
+[Unit]
+Description=Initialize Kubernetes control plane (kubeadm)
+After=network-online.target containerd.service kubelet.service
+Wants=network-online.target containerd.service kubelet.service
+ConditionPathExists=!/etc/kubernetes/admin.conf
+
+[Service]
+Type=oneshot
+ExecStart=/usr/libexec/k8s-control-plane-init
+RemainAfterExit=yes
+Restart=on-failure
+RestartSec=30
+TimeoutStartSec=30min
+
+[Install]
+WantedBy=multi-user.target

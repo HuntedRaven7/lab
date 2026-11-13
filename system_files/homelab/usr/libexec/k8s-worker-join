@@ -1,0 +1,37 @@
+#!/usr/bin/env bash
+# Fetch a kubeadm join command from the control plane and join this worker.
+# Control plane endpoint is read from /etc/kubernetes/node.env (CONTROL_PLANE,
+# TOKEN_PORT). Idempotent: exits if this node already joined.
+
+set -euo pipefail
+
+JOIN_MARKER=/etc/kubernetes/kubelet.conf
+NODE_ENV=/etc/kubernetes/node.env
+LOG_TAG=k8s-worker-join
+
+log() { logger -t "$LOG_TAG" -- "$*"; echo "[$LOG_TAG] $*"; }
+die() { log "FATAL: $*"; exit 1; }
+
+[[ -s "$JOIN_MARKER" ]] && { log "node already joined, nothing to do"; exit 0; }
+[[ -f "$NODE_ENV" ]] || die "missing $NODE_ENV"
+
+# shellcheck disable=SC1090
+source "$NODE_ENV"
+
+CP_ADDR="${CONTROL_PLANE:-}"
+TOKEN_PORT="${TOKEN_PORT:-6447}"
+[[ -n "$CP_ADDR" ]] || die "CONTROL_PLANE is not set in $NODE_ENV"
+
+mkdir -p /etc/kubernetes
+
+log "fetching join command from http://${CP_ADDR}:${TOKEN_PORT}/join"
+until JOIN_CMD="$(curl -fsS --max-time 10 "http://${CP_ADDR}:${TOKEN_PORT}/join")"; do
+    log "join command not ready, retrying in 10s"
+    sleep 10
+done
+
+[[ -n "$JOIN_CMD" ]] || die "received empty join command"
+
+log "running kubeadm join"
+eval "$JOIN_CMD"
+log "worker joined cluster"

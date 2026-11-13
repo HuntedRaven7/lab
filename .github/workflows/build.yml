@@ -16,22 +16,27 @@ on:
 env:
   IMAGE_REGISTRY: "ghcr.io/${{ github.repository_owner }}"  # do not edit
 
-concurrency:
-  group: ${{ github.workflow }}-${{ github.ref || github.run_id }}-${{ inputs.brand_name}}-${{ inputs.stream_name }}
-  cancel-in-progress: true
-
 jobs:
-  build_push:
-    name: Build and push image
+  build_homelab_base:
+    name: Build and push homelab base image
     runs-on: ubuntu-26.04
+    outputs:
+      digest: ${{ steps.push-image.outputs.digest }}
+      default_tag: ${{ steps.gen-default-tag.outputs.default_tag }}
 
     permissions:
       contents: read
       packages: write
       id-token: write
 
+    env:
+      IMAGE_NAME: homelab
+
+    concurrency:
+      group: ${{ github.workflow }}-${{ github.ref || github.run_id }}-homelab-base
+      cancel-in-progress: true
+
     steps:
-      # These stage versions are pinned by https://github.com/renovatebot/renovate
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
@@ -46,27 +51,18 @@ jobs:
         run: |
           just check
 
-      - name: Image Name
-        id: image-name
-        run: |
-          IMAGE_NAME=$(just image_name)
-
-          echo "IMAGE_NAME=${IMAGE_NAME}" >> $GITHUB_ENV
-
       - name: Default Tag
         id: gen-default-tag
         run: |
           DEFAULT_TAG=$(just generate-default-tag)
-
+          echo "default_tag=${DEFAULT_TAG}" >> $GITHUB_OUTPUT
           echo "DEFAULT_TAG=${DEFAULT_TAG}" >> $GITHUB_ENV
 
       - name: Prepare environment
         run: |
-          # Lowercase the image uri https://github.com/macbre/push-to-ghcr/issues/12
           echo "IMAGE_REGISTRY=${IMAGE_REGISTRY,,}" >> ${GITHUB_ENV}
           echo "IMAGE_NAME=${IMAGE_NAME,,}" >> ${GITHUB_ENV}
 
-      # This actually builds the container image
       - name: Build Image
         id: build-image
         run: |
@@ -102,10 +98,8 @@ jobs:
             "${DEFAULT_TAG}" \
             "${ALIAS_TAGS}"
 
-      # These `if` statements are so that pull requests for your custom images do not make it publish any packages under your name without you knowing
-      # They also check if the runner is on the default branch so that things like the merge queue (if you enable it), are going to work
       - name: Login to GitHub Container Registry
-        uses: docker/login-action@abd2ef45e78c5afb21d64d4ca52ee8550d9572c7 # v4.5.1
+        uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550 # v4.8.0
         if: github.event_name != 'pull_request' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
         with:
           registry: ghcr.io
@@ -124,30 +118,283 @@ jobs:
           done
 
           digest=$(< /tmp/digestfile)
-
           echo "digest=${digest}" >> $GITHUB_OUTPUT
 
-      # This section is optional and only needs to be enabled if you plan on distributing
-      # your project for others to consume. You will need to create a public and private key
-      # using Cosign and save the private key as a repository secret in Github for this workflow
-      # to consume. For more details, review the image signing section of the README.
       - name: Install Cosign
-        uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+        uses: sigstore/cosign-installer@756fe2d284c7292c4e9b62c8a28f1e5629c59532 # v4.1.3
         if: github.event_name != 'pull_request' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
         with:
-          # be careful when upgrading major versions
-          cosign-release: 'v3.1.4'
+          cosign-release: 'v3.1.2'
 
       - name: Sign container image
-        id: sign-image
         if: github.event_name != 'pull_request' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
         env:
           COSIGN_EXPERIMENTAL: false
           COSIGN_PRIVATE_KEY: ${{ secrets.SIGNING_SECRET }}
           DIGEST: ${{ steps.push-image.outputs.digest }}
         run: |
-          # https://github.com/containers/container-libs/issues/388
-          # https://github.com/coreos/rpm-ostree/issues/5509
-          # use old bundle format, so we can use newer cosign 3.X.X instead of 2.X.X
           cosign sign -y --new-bundle-format=false --use-signing-config=false --key env://COSIGN_PRIVATE_KEY ${IMAGE_REGISTRY}/${IMAGE_NAME}@${DIGEST}
+
+  build_workstation:
+    name: Build and push workstation image
+    runs-on: ubuntu-26.04
+
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+
+    env:
+      IMAGE_NAME: workstation
+
+    concurrency:
+      group: ${{ github.workflow }}-${{ github.ref || github.run_id }}-workstation
+      cancel-in-progress: true
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Maximize build space
+        uses: ublue-os/remove-unwanted-software@695eb75bc387dbcd9685a8e72d23439d8686cba6
+
+      - name: Install just
+        uses: extractions/setup-just@53165ef7e734c5c07cb06b3c8e7b647c5aa16db3 #v4.0.0
+
+      - name: Check Just Syntax
+        shell: bash
+        run: |
+          just check
+
+      - name: Default Tag
+        id: gen-default-tag
+        run: |
+          DEFAULT_TAG=$(just generate-default-tag)
+          echo "DEFAULT_TAG=${DEFAULT_TAG}" >> $GITHUB_ENV
+
+      - name: Prepare environment
+        run: |
+          echo "IMAGE_REGISTRY=${IMAGE_REGISTRY,,}" >> ${GITHUB_ENV}
+          echo "IMAGE_NAME=${IMAGE_NAME,,}" >> ${GITHUB_ENV}
+
+      - name: Build Image
+        id: build-image
+        run: |
+          just build \
+            ${IMAGE_NAME} \
+            ${DEFAULT_TAG}
+
+      - name: Rechunk with Chunkah
+        id: rechunk
+        run: |
+          just rechunk \
+            ${IMAGE_NAME} \
+            ${DEFAULT_TAG}
+
+      - name: Generate Build Tags
+        id: gen-build-tags
+        run: |
+          alias_tags="$(just generate-build-tags \
+                        ${IMAGE_NAME} \
+                        ${DEFAULT_TAG})"
+
+          echo "Tags for this Action..."
+          echo "${alias_tags}"
+          echo "alias_tags=${alias_tags}" >> $GITHUB_OUTPUT
+
+      - name: Tag Image
+        id: tag-images
+        env:
+          ALIAS_TAGS: ${{ steps.gen-build-tags.outputs.alias_tags }}
+        run: |
+          just tag-images \
+            "${IMAGE_NAME}" \
+            "${DEFAULT_TAG}" \
+            "${ALIAS_TAGS}"
+
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550 # v4.8.0
+        if: github.event_name != 'pull_request' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Push To GHCR
+        if: github.event_name != 'pull_request' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+        id: push-image
+        env:
+          ALIAS_TAGS: ${{ steps.gen-build-tags.outputs.alias_tags }}
+        run: |
+          set -euox pipefail
+          for tag in ${ALIAS_TAGS}; do
+            podman push --digestfile=/tmp/digestfile ${IMAGE_NAME}:${tag} ${IMAGE_REGISTRY}/${IMAGE_NAME}:${tag}
+          done
+
+          digest=$(< /tmp/digestfile)
+          echo "digest=${digest}" >> $GITHUB_OUTPUT
+
+      - name: Install Cosign
+        uses: sigstore/cosign-installer@756fe2d284c7292c4e9b62c8a28f1e5629c59532 # v4.1.3
+        if: github.event_name != 'pull_request' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+        with:
+          cosign-release: 'v3.1.2'
+
+      - name: Sign container image
+        if: github.event_name != 'pull_request' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+        env:
+          COSIGN_EXPERIMENTAL: false
+          COSIGN_PRIVATE_KEY: ${{ secrets.SIGNING_SECRET }}
+          DIGEST: ${{ steps.push-image.outputs.digest }}
+        run: |
+          cosign sign -y --new-bundle-format=false --use-signing-config=false --key env://COSIGN_PRIVATE_KEY ${IMAGE_REGISTRY}/${IMAGE_NAME}@${DIGEST}
+
+  build_nodes:
+    name: Build and push ${{ matrix.image }} image
+    runs-on: ubuntu-26.04
+    needs: build_homelab_base
+
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+
+    strategy:
+      fail-fast: false
+      matrix:
+        image:
+          - homelab-0
+          - homelab-1
+          - homelab-2
+
+    env:
+      IMAGE_NAME: ${{ matrix.image }}
+      BASE_IMAGE_NAME: homelab
+
+    concurrency:
+      group: ${{ github.workflow }}-${{ github.ref || github.run_id }}-${{ matrix.image }}
+      cancel-in-progress: true
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Maximize build space
+        uses: ublue-os/remove-unwanted-software@695eb75bc387dbcd9685a8e72d23439d8686cba6
+
+      - name: Install just
+        uses: extractions/setup-just@53165ef7e734c5c07cb06b3c8e7b647c5aa16db3 #v4.0.0
+
+      - name: Check Just Syntax
+        shell: bash
+        run: |
+          just check
+
+      - name: Default Tag
+        id: gen-default-tag
+        run: |
+          DEFAULT_TAG=$(just generate-default-tag)
+          echo "DEFAULT_TAG=${DEFAULT_TAG}" >> $GITHUB_ENV
+
+      - name: Prepare environment
+        run: |
+          echo "IMAGE_REGISTRY=${IMAGE_REGISTRY,,}" >> ${GITHUB_ENV}
+          echo "IMAGE_NAME=${IMAGE_NAME,,}" >> ${GITHUB_ENV}
+
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550 # v4.8.0
+        if: github.event_name != 'pull_request' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Resolve base image
+        id: base-image
+        env:
+          BASE_DIGEST: ${{ needs.build_homelab_base.outputs.digest }}
+        run: |
+          if [[ "${{ github.event_name }}" != "pull_request" && "${{ github.ref }}" == "refs/heads/${{ github.event.repository.default_branch }}" ]]; then
+            if [[ -z "${BASE_DIGEST}" ]]; then
+              echo "Missing base image digest from build_homelab_base" >&2
+              exit 1
+            fi
+            # Consume the exact homelab base image built/pushed at the start of this workflow run.
+            echo "BASE_IMAGE=${IMAGE_REGISTRY}/${BASE_IMAGE_NAME}@${BASE_DIGEST}" >> $GITHUB_ENV
+          else
+            echo "BASE_IMAGE=localhost/${BASE_IMAGE_NAME}:${DEFAULT_TAG}" >> $GITHUB_ENV
+          fi
+
+      - name: Build base image (local, for PRs)
+        if: github.event_name == 'pull_request' || github.ref != format('refs/heads/{0}', github.event.repository.default_branch)
+        run: |
+          just build ${BASE_IMAGE_NAME} ${DEFAULT_TAG}
+
+      - name: Build Image
+        id: build-image
+        env:
+          BASE_IMAGE: ${{ env.BASE_IMAGE }}
+        run: |
+          BASE_IMAGE=${BASE_IMAGE} just build \
+            ${IMAGE_NAME} \
+            ${DEFAULT_TAG}
+
+      - name: Rechunk with Chunkah
+        id: rechunk
+        run: |
+          just rechunk \
+            ${IMAGE_NAME} \
+            ${DEFAULT_TAG}
+
+      - name: Generate Build Tags
+        id: gen-build-tags
+        run: |
+          alias_tags="$(just generate-build-tags \
+                        ${IMAGE_NAME} \
+                        ${DEFAULT_TAG})"
+
+          echo "Tags for this Action..."
+          echo "${alias_tags}"
+          echo "alias_tags=${alias_tags}" >> $GITHUB_OUTPUT
+
+      - name: Tag Image
+        id: tag-images
+        env:
+          ALIAS_TAGS: ${{ steps.gen-build-tags.outputs.alias_tags }}
+        run: |
+          just tag-images \
+            "${IMAGE_NAME}" \
+            "${DEFAULT_TAG}" \
+            "${ALIAS_TAGS}"
+
+      - name: Push To GHCR
+        if: github.event_name != 'pull_request' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+        id: push-image
+        env:
+          ALIAS_TAGS: ${{ steps.gen-build-tags.outputs.alias_tags }}
+        run: |
+          set -euox pipefail
+          for tag in ${ALIAS_TAGS}; do
+            podman push --digestfile=/tmp/digestfile ${IMAGE_NAME}:${tag} ${IMAGE_REGISTRY}/${IMAGE_NAME}:${tag}
+          done
+
+          digest=$(< /tmp/digestfile)
+          echo "digest=${digest}" >> $GITHUB_OUTPUT
+
+      - name: Install Cosign
+        uses: sigstore/cosign-installer@756fe2d284c7292c4e9b62c8a28f1e5629c59532 # v4.1.3
+        if: github.event_name != 'pull_request' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+        with:
+          # be careful when upgrading major versions
+          cosign-release: 'v3.1.4'
+
+      - name: Sign container image
+        if: github.event_name != 'pull_request' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+        env:
+          COSIGN_EXPERIMENTAL: false
+          COSIGN_PRIVATE_KEY: ${{ secrets.SIGNING_SECRET }}
+          DIGEST: ${{ steps.push-image.outputs.digest }}
+        run: |
+          cosign sign -y --new-bundle-format=false --use-signing-config=false --key env://COSIGN_PRIVATE_KEY ${IMAGE_REGISTRY}/${IMAGE_NAME}@${DIGEST}
+
 

@@ -1,0 +1,49 @@
+# Workstation image
+
+# Allow build scripts to be referenced without being copied into the final image
+FROM scratch AS ctx
+COPY build_files /
+COPY system_files/workstation/ /system_files
+COPY repos/ /repos
+
+# Base image
+FROM quay.io/fedora/fedora-bootc:45
+
+# [IM]MUTABLE /opt
+RUN rm -rf /opt && mkdir /opt
+
+# MODIFICATIONS
+
+# Bring in repos
+RUN --mount=type=bind,from=ctx,source=/,target=/ctx \
+    --mount=type=cache,dst=/var/cache \
+    --mount=type=cache,dst=/var/log \
+    --mount=type=tmpfs,dst=/tmp \
+    /ctx/repo.sh
+
+# Le Tailscale (Podman Quadlet)
+RUN --mount=type=bind,from=ctx,source=/,target=/ctx \
+    --mount=type=cache,dst=/var/cache \
+    --mount=type=cache,dst=/var/log \
+    --mount=type=tmpfs,dst=/tmp \
+    mkdir -p /var/lib/tailscale /etc/tailscale
+
+# UUPD
+RUN --mount=type=bind,from=ctx,source=/,target=/ctx \
+    --mount=type=cache,dst=/var/cache \
+    --mount=type=cache,dst=/var/log \
+    --mount=type=tmpfs,dst=/tmp \
+    /ctx/uupd-build.sh 
+
+# DESKTOP
+RUN --mount=type=bind,from=ctx,source=/,target=/ctx \
+    --mount=type=cache,dst=/var/cache \
+    --mount=type=cache,dst=/var/log \
+    --mount=type=tmpfs,dst=/tmp \
+    /ctx/build-workstation.sh 
+
+# INIT
+CMD ["/sbin/init"]
+
+# LINTING
+RUN bootc container lint

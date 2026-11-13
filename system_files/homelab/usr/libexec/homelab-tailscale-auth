@@ -1,0 +1,28 @@
+#!/usr/bin/env bash
+# Authenticate Tailscale on first boot using /etc/tailscale/authkey (never
+# baked into the image). Runs against the tailscaled Podman Quadlet container.
+# No-op if the key file is absent or the node is already authenticated.
+set -euo pipefail
+
+KEY_FILE=/etc/tailscale/authkey
+[[ -s "$KEY_FILE" ]] || exit 0
+
+# Wait for tailscaled container/service to be ready.
+for _ in $(seq 1 60); do
+    if podman exec tailscaled tailscale status >/dev/null 2>&1; then
+        break
+    fi
+    sleep 5
+done
+
+if podman exec tailscaled tailscale ip -4 >/dev/null 2>&1 && \
+   [[ -n "$(podman exec tailscaled tailscale ip -4 2>/dev/null || true)" ]]; then
+    echo "Tailscale already authenticated"
+    exit 0
+fi
+
+HOSTNAME_SHORT="$(cat /proc/sys/kernel/hostname | cut -d. -f1)"
+AUTHKEY="$(tr -d '[:space:]' < "$KEY_FILE")"
+
+echo "Running tailscale up for ${HOSTNAME_SHORT}"
+podman exec tailscaled tailscale up --authkey="$AUTHKEY" --hostname="$HOSTNAME_SHORT"

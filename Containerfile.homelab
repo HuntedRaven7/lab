@@ -1,0 +1,114 @@
+# Staged homelab build: base image then homelab-0/1/2 node images.
+#
+# Runs a standard Kubernetes (kubeadm) cluster. homelab-0 is the control plane;
+# Cilium, MetalLB, KubeStellar (core + Console) are installed manually
+# (see docs/kubestellar-manual-setup.md). homelab-1/2 are worker nodes that
+# join using a command served by homelab-0.
+# No secrets baked into the image; runtime material (join state, Tailscale auth
+# key, etc.) lives on the node under /etc/kubernetes and /etc/tailscale.
+
+ARG AKMODS_VERSION="${AKMODS_VERSION:-coreos-stable-44}"
+ARG BASE_IMAGE=homelab
+
+# Build contexts
+FROM scratch AS ctx
+COPY build_files /
+COPY system_files/homelab/ /system_files
+
+FROM scratch AS ctx-homelab-0
+COPY build_files /
+COPY system_files/homelab-0/ /system_files
+
+FROM scratch AS ctx-homelab-1
+COPY build_files /
+COPY system_files/homelab-1/ /system_files
+
+FROM scratch AS ctx-homelab-2
+COPY build_files /
+COPY system_files/homelab-2/ /system_files
+
+# Base Image
+FROM quay.io/fedora/fedora-bootc:45 AS homelab
+
+# Laptop suspend off when lid closed
+RUN systemctl mask sleep.target suspend.target hibernate.target hybrid-sleep.target suspend-then-hibernate.target && \
+    mkdir -p /etc/systemd/logind.conf.d && \
+    printf '[Login]\nHandleLidSwitch=ignore\nHandleLidSwitchExternalPower=ignore\nHandleLidSwitchDocked=ignore\nHandleSuspendKey=ignore\nHandleHibernateKey=ignore\nIdleAction=ignore\n' \
+      > /etc/systemd/logind.conf.d/50-no-suspend.conf
+
+# Le Scale Tail (Podman Quadlet)
+RUN --mount=type=bind,from=ctx,source=/,target=/ctx \
+    --mount=type=cache,dst=/var/cache \
+    --mount=type=cache,dst=/var/log \
+    --mount=type=tmpfs,dst=/tmp \
+    mkdir -p /var/lib/tailscale /etc/tailscale
+
+# containerd + kubeadm/kubelet/kubectl + helm + clusteradm (OCM CLI)
+RUN --mount=type=bind,from=ctx,source=/,target=/ctx \
+    --mount=type=cache,dst=/var/cache \
+    --mount=type=cache,dst=/var/log \
+    --mount=type=tmpfs,dst=/tmp \
+    /ctx/k8s.sh
+
+# BUILD (shared homelab files, packages, service presets)
+RUN --mount=type=bind,from=ctx,source=/,target=/ctx \
+    --mount=type=cache,dst=/var/cache \
+    --mount=type=cache,dst=/var/log \
+    --mount=type=tmpfs,dst=/tmp \
+    /ctx/build-homelab.sh
+
+# Cleaning stuff
+RUN --mount=type=bind,from=ctx,source=/,target=/ctx \
+    --mount=type=cache,dst=/var/cache \
+    --mount=type=cache,dst=/var/log \
+    --mount=type=tmpfs,dst=/tmp \
+    /ctx/cleanup.sh
+
+# INIT
+CMD ["/sbin/init"]
+
+# LINTING
+RUN bootc container lint
+
+# Homelab node 0 (control plane) - consumes base homelab stage/image.
+# Initializes a kubeadm control plane and serves a worker join command for
+# homelab-1/2. Cilium/MetalLB/KubeStellar are installed manually
+# (see docs/kubestellar-manual-setup.md).
+FROM ${BASE_IMAGE} AS homelab-0
+
+RUN --mount=type=bind,from=ctx-homelab-0,source=/,target=/ctx \
+    --mount=type=cache,dst=/var/cache \
+    --mount=type=cache,dst=/var/log \
+    --mount=type=tmpfs,dst=/tmp \
+    /ctx/build-homelab-node.sh 0
+
+CMD ["/sbin/init"]
+RUN bootc container lint
+
+# Homelab node 1 (worker) - consumes base homelab stage/image.
+# Joins the homelab-0 cluster as a worker using the join command served by
+# the control plane.
+FROM ${BASE_IMAGE} AS homelab-1
+
+RUN --mount=type=bind,from=ctx-homelab-1,source=/,target=/ctx \
+    --mount=type=cache,dst=/var/cache \
+    --mount=type=cache,dst=/var/log \
+    --mount=type=tmpfs,dst=/tmp \
+    /ctx/build-homelab-node.sh 1
+
+CMD ["/sbin/init"]
+RUN bootc container lint
+
+# Homelab node 2 (worker) - consumes base homelab stage/image.
+# Joins the homelab-0 cluster as a worker using the join command served by
+# the control plane.
+FROM ${BASE_IMAGE} AS homelab-2
+
+RUN --mount=type=bind,from=ctx-homelab-2,source=/,target=/ctx \
+    --mount=type=cache,dst=/var/cache \
+    --mount=type=cache,dst=/var/log \
+    --mount=type=tmpfs,dst=/tmp \
+    /ctx/build-homelab-node.sh 2
+
+CMD ["/sbin/init"]
+RUN bootc container lint
