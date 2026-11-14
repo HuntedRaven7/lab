@@ -24,7 +24,10 @@ local-path is node-local and not replicated. For durable/shared storage
 (Longhorn, NFS, Rook/Ceph) the image already includes `iscsi-initiator-utils`,
 `nfs-utils`, `cifs-utils`, `device-mapper` and `cryptsetup`, and kubelet runs
 with `/var/lib/kubelet` rshared via
-`homelab-kubelet-mount-propagation.service`.
+`homelab-kubelet-mount-propagation.service`. Host path `/var/lib/homelab/local-path`
+is created with tmpfiles/SELinux labeling by the image build; if provisioning
+fails, verify the directory exists, is writable, and has the expected
+`container_file_t` context on the target node.
 
 ## Metrics server
 
@@ -89,6 +92,30 @@ Or use Flux. Keep runtime secrets in-cluster/secret store, not in Git or images.
   control-plane and workers, and `JOIN_BIND_ADDR` in `/etc/kubernetes/join-server.env`.
   Workers remain firewall-scoped; restrict 6447/tcp to known worker sources.
 
+
+## Node firewall / required ports
+
+Host firewall rules are image-managed in `build_files/build-homelab-node.sh`
+(`firewall-offline-cmd`, persistent in the image; applied with `bootc
+upgrade`/reboot). Rules are set as firewalld default zone **public** and added
+to `--zone=public` so cluster traffic is allowed consistently:
+
+- **All nodes:** 6443/tcp (apiserver client), 10250/tcp (kubelet API, required
+  for control-plane/apiserver → kubelet logs/exec/metrics and some volume ops),
+  8472/udp (Cilium VXLAN), 51871/udp (Cilium WireGuard, optional), 4240/tcp
+  (Cilium health), 4244/tcp (Hubble server), 4245/tcp (Hubble relay), 7946/tcp+udp
+  (MetalLB memberlist), 179/tcp (MetalLB BGP, optional), 30000-32767/tcp+udp
+  (NodePort), ssh/mdns, masquerade.
+- **Control plane (homelab-0) only:** 2379-2380/tcp (etcd), 10257/tcp
+  (controller-manager), 10259/tcp (scheduler), 6447/tcp (join server; restrict
+  source in production-like environments).
+- **Tailscale:** `tailscale0` is added to the `trusted` zone when present.
+
+If kubelet/API traffic is unreachable, verify the node’s active LAN interface is
+in a zone that includes these ports (or in `public`), and check for conflicting
+runtime firewalld/nft/iptables rules. From the control plane, kubelet health
+should respond with auth required (not timeout/refused/no route), e.g.
+`curl -sk --max-time 3 https://<worker-ip>:10250/healthz` → `Unauthorized`/401.
 
 ## Registry mirrors
 

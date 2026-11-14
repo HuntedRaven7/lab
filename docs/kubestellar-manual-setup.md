@@ -169,6 +169,15 @@ Access: `sudo kubectl -n kubestellar-console port-forward svc/kc-kubestellar-con
   `kubeadm init phase upload-config all --kubeconfig=/etc/kubernetes/admin.conf`,
   `kubeadm init phase bootstrap-token --kubeconfig=/etc/kubernetes/admin.conf`,
   then `kubeadm token create --print-join-command --kubeconfig=/etc/kubernetes/admin.conf | sudo tee /etc/kubernetes/join-command`.
+- Control-plane ↔ worker connectivity: workers must reach the apiserver
+  (`6443/tcp`) and the control plane must reach each worker kubelet
+  (`10250/tcp`) for logs/exec/metrics and volume workflows. Image firewall
+  config (`build_files/build-homelab-node.sh`, default/public zone) opens these
+  ports consistently; verify with
+  `curl -sk --max-time 3 https://<node-ip>:10250/healthz` from `homelab-0`
+  (expected: `Unauthorized`/401, not timeout/refused/no route). If unreachable,
+  confirm the active interface/zone and runtime firewall rules, then rebuild and
+  `bootc upgrade`/reboot nodes to apply image changes.
 - If a worker must rejoin, reset its Kubernetes state (`kubeadm reset -f`,
   remove `/etc/kubernetes/*` except intended node env/token, `/var/lib/kubelet`,
   CNI state as appropriate) and let the join service run again, or re-image.

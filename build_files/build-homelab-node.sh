@@ -12,27 +12,47 @@ mkdir -p /etc/kubernetes /var/lib/etcd /var/backups/etcd
 
 # Open ports needed by Kubernetes, Cilium, and (control-plane only) join server.
 # firewall-offline-cmd works in image builds without a running firewalld.
+# Rules target --zone=public explicitly and set it as default so they apply
+# consistently to LAN interfaces regardless of runtime default-zone drift.
 if command -v firewall-offline-cmd >/dev/null 2>&1; then
-    firewall-offline-cmd --add-service=ssh || true          # remote administration
-    firewall-offline-cmd --add-service=mdns || true         # .local / mDNS
-    firewall-offline-cmd --add-port=6443/tcp || true   # kube-apiserver
-    firewall-offline-cmd --add-port=2379/tcp || true   # etcd client (local/HA)
-    firewall-offline-cmd --add-port=2380/tcp || true   # etcd peer (HA)
-    firewall-offline-cmd --add-port=10250/tcp || true  # kubelet
-    firewall-offline-cmd --add-port=10257/tcp || true  # controller-manager
-    firewall-offline-cmd --add-port=10259/tcp || true  # scheduler
+    FW_ZONE="public"
+    fw() { firewall-offline-cmd --zone="${FW_ZONE}" "$@" || true; }
+
+    firewall-offline-cmd --set-default-zone="${FW_ZONE}" || true
+    fw --add-service=ssh    # remote administration
+    fw --add-service=mdns   # .local / mDNS
+
+    # Kubernetes API / kubelet (apiserver -> kubelet logs/exec/metrics on all nodes)
+    fw --add-port=6443/tcp    # kube-apiserver
+    fw --add-port=10250/tcp   # kubelet API
+
+    # Cilium / CNI
+    fw --add-port=8472/udp    # VXLAN (Cilium default overlay)
+    fw --add-port=51871/udp   # Cilium WireGuard (optional)
+    fw --add-port=4240/tcp    # Cilium health
+    fw --add-port=4244/tcp    # Hubble server
+    fw --add-port=4245/tcp    # Hubble relay
+
+    # MetalLB / L2-BGP (optional but kept consistent)
+    fw --add-port=7946/tcp    # MetalLB memberlist
+    fw --add-port=7946/udp    # MetalLB memberlist
+    fw --add-port=179/tcp     # MetalLB BGP
+
+    # NodePort Services (broad compatibility for host-firewalled nodes)
+    fw --add-port=30000-32767/tcp
+    fw --add-port=30000-32767/udp
+
     if [[ "$NODE" == "0" ]]; then
-        firewall-offline-cmd --add-port=6447/tcp || true   # join command server (control-plane only)
+        # Control-plane-only components and join endpoint
+        fw --add-port=2379/tcp    # etcd client (local/HA)
+        fw --add-port=2380/tcp    # etcd peer (HA)
+        fw --add-port=10257/tcp   # controller-manager
+        fw --add-port=10259/tcp   # scheduler
+        fw --add-port=6447/tcp    # join command server (restrict source at runtime if needed)
     fi
-    firewall-offline-cmd --add-port=8472/udp || true   # VXLAN (Cilium default)
-    firewall-offline-cmd --add-port=7946/tcp || true   # MetalLB memberlist
-    firewall-offline-cmd --add-port=7946/udp || true   # MetalLB memberlist
-    firewall-offline-cmd --add-port=51871/udp || true  # Cilium WireGuard (optional)
-    firewall-offline-cmd --add-port=179/tcp || true    # MetalLB BGP (optional)
-    firewall-offline-cmd --add-port=4240/tcp || true   # Cilium health
-    firewall-offline-cmd --add-port=4244/tcp || true   # Hubble server
-    firewall-offline-cmd --add-port=4245/tcp || true   # Hubble relay
-    firewall-offline-cmd --add-masquerade || true
+
+    fw --add-masquerade
+    # Tailscale interface remains fully trusted when present
     firewall-offline-cmd --zone=trusted --add-interface=tailscale0 || true
 fi
 

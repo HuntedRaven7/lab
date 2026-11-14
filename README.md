@@ -33,8 +33,16 @@ join command, Tailscale auth key, etc.) lives on-node under `/etc/kubernetes`,
 - journald caps, zram swap disabled, `sshd`/`firewalld`/`containerd`/`kubelet`
   enabled, optional Tailscale first-boot auth, and daily etcd snapshot backups
   on homelab-0.
-- firewalld opens Kubernetes, Cilium (VXLAN **8472/udp**), Hubble and MetalLB
-  memberlist ports.
+- firewalld (default zone **public**, configured image-persistently via
+  `build_files/build-homelab-node.sh`) opens Kubernetes/Cilium/MetalLB ports on
+  all nodes, including **6443/tcp** (apiserver), **10250/tcp** (kubelet API,
+  required for control-plane logs/exec/metrics and node volume operations),
+  Cilium VXLAN **8472/udp** + Hubble, MetalLB memberlist, and NodePort
+  **30000-32767/tcp+udp**. Control-plane-only ports (**2379-2380, 10257, 10259,
+  6447**) are opened on `homelab-0`; `tailscale0` is placed in the trusted zone.
+  If the active LAN interface is not in `public`, assign it appropriately or
+  adjust zones so these rules apply to cluster traffic. Rebuild/redeploy images
+  (`bootc upgrade`/reboot) to apply firewall changes to existing nodes.
 
 ### Control plane and worker join
 
