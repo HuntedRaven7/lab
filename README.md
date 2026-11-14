@@ -81,7 +81,7 @@ KubeFlex prerequisites and node maintenance.
 
 Applications are deployed via KubeStellar BindingPolicies (not baked into images).
 
-### Building
+### Building and updating
 
 ```bash
 # Build base
@@ -99,8 +99,11 @@ To consume a published base image instead of the local `localhost/homelab:<tag>`
 BASE_IMAGE=ghcr.io/huntedraven7/homelab:latest just build homelab-0
 ```
 
+After rebuilding, roll out with `bootc upgrade`/reboot per node (backup etcd and drain nodes; control-plane changes first). For Kubernetes add-ons, containerized brew/Tailscale, and maintenance details, see [`docs/platform-addons.md`](docs/platform-addons.md).
+
 ## Workstation
 
 ```bash
 just build workstation
 ```
+

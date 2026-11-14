@@ -117,18 +117,48 @@ On multi-homed nodes (LAN + `tailscale0`), pin Kubernetes API/Cilium addresses
 to the intended LAN IP and verify pod egress/DNS. See Cilium notes in the
 manual setup doc.
 
-## Bootc updates on cluster nodes
+## Updates and maintenance
 
-Treat node updates as maintenance (one node at a time):
+### Image and node OS updates (bootc)
+
+Rebuild images when repo files change (Containerfiles, `build_files/`, `system_files/`, manifests/scripts), then roll out one node at a time:
 
 ```bash
-# on homelab-0 before a controller update
-sudo systemctl start k8s-etcd-backup.service
-
-sudo kubectl drain <node> --ignore-daemonsets --delete-emptydir-data
-sudo bootc upgrade
-sudo systemctl reboot
-sudo kubectl uncordon <node>
+# from repo
+just build homelab
+just build homelab-0  # and homelab-1/homelab-2 as needed
+# or consume published base: BASE_IMAGE=ghcr.io/huntedraven7/homelab:latest just build homelab-0
 ```
 
-Back up the control plane before upgrades that change Kubernetes versions.
+On each node (control plane first only for control-plane-only changes; otherwise drain/upgrade carefully):
+
+```bash
+# on homelab-0 before a control-plane update
+export KUBECONFIG=/etc/kubernetes/admin.conf
+sudo systemctl start k8s-etcd-backup.service
+
+sudo -E kubectl drain <node> --ignore-daemonsets --delete-emptydir-data
+sudo bootc upgrade            # or bootc switch <image-ref> to change image
+sudo systemctl reboot
+# after reboot, verify services and cluster state
+sudo -E kubectl uncordon <node>
+sudo -E kubectl get nodes,pods -A -o wide
+```
+
+- Back up/verify `/var/backups/etcd` before Kubernetes-version or control-plane changes.
+- `k8s-control-plane-init.service` reconciles on boot (flexvolume patch, missing `kubelet.conf` repair, join command, bundled manifests in `/usr/share/homelab/manifests`). `kubelet` runs `k8s-kubelet-migrate` at start to strip deprecated flags from `/var/lib/kubelet/kubeadm-flags.env`.
+- Runtime state under `/etc/kubernetes`, `/var/lib/etcd`, `/var/lib/kubelet`, `/var/lib/containerd`, `/var/lib/tailscale`, etc. persists across upgrades; image-managed files under `/usr` are replaced.
+- Keep node clocks in sync (NTP) on all nodes.
+
+### Kubernetes and add-on updates
+
+- **Cilium:** pin/test a version, then `helm repo update cilium && helm upgrade cilium cilium/cilium -n kube-system --version <ver> --reuse-values --wait --timeout 10m`. Reconcile after interrupted installs with `helm -n kube-system status cilium`.
+- **CoreDNS:** if missing or after bootstrap issues, `sudo kubeadm init phase addon coredns --kubeconfig=/etc/kubernetes/admin.conf`; for version-aligned upgrades follow your Kubernetes upgrade procedure.
+- **local-path-provisioner:** bundled manifest is reapplied on control-plane reconcile; to force-update apply `manifests/local-path-storage.yaml` (or image-bundled copy) manually.
+- **MetalLB, metrics-server, cert-manager, Gateway, GitOps, KubeStellar/Console:** update via their pinned Helm charts/manifests (`helm repo update`, `helm upgrade --install ... --version <ver>`), verify CRDs/compatibility before Kubernetes minor upgrades.
+- **Kubernetes minor upgrades:** plan separately (kubeadm upgrade flow, drain/backup, control-plane then workers), then rebuild/redeploy images with matching `K8S_MINOR` in `build_files/k8s.sh` and re-test node join/recovery.
+
+### Containerized tools and services
+
+- **Brew:** `brew` runs via Podman wrapper (`ghcr.io/homebrew/brew:latest` by default). Update packages with `brew update && brew upgrade` (persistent prefix/state under `/var/lib/homebrew` and `/var/lib/homebrew-state`). Wrapper/env fixes require an image rebuild+redeploy.
+- **Tailscale:** runs as Quadlet container `docker.io/tailscale/tailscale:stable`. To pick up a newer image: `sudo podman pull docker.io/tailscale/tailscale:stable && sudo systemctl restart tailscaled.service` (state persists in `/var/lib/tailscale`; re-auth only if needed). Wrapper/auth-helper fixes require image rebuild+redeploy.
