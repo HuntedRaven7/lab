@@ -28,8 +28,11 @@ command, Tailscale auth key) lives on-node under `/etc/kubernetes`,
   ```bash
   sudo kubectl --kubeconfig=/etc/kubernetes/admin.conf get nodes -o wide
   sudo kubectl --kubeconfig=/etc/kubernetes/admin.conf get --raw='/readyz?verbose'
+  sudo kubectl --kubeconfig=/etc/kubernetes/admin.conf -n kube-system get pods -l k8s-app=kube-dns -o wide
   ```
-  Nodes/pods will not be Ready until a CNI (Cilium) is installed.
+  Nodes/pods will not be Ready until a CNI (Cilium) is installed. If CoreDNS is
+  missing, install it with `sudo kubeadm init phase addon coredns --kubeconfig=/etc/kubernetes/admin.conf`.
+  Ensure node clocks are in sync (NTP) before/after join.
 
 Convenience:
 ```bash
@@ -70,6 +73,17 @@ sudo -E helm upgrade --install cilium cilium/cilium \
 sudo kubectl -n kube-system get pods -l app.kubernetes.io/part-of=cilium -o wide
 sudo kubectl get nodes -o wide
 ```
+
+If `--wait` fails/times out or is interrupted, Cilium core may still be running;
+check `helm -n kube-system status cilium` and pod status. Ensure CoreDNS is
+healthy (Hubble relay needs cluster DNS), then reconcile with
+`helm upgrade --install cilium cilium/cilium -n kube-system --reuse-values --wait --timeout 10m`.
+On single-node clusters you can disable Hubble with
+`--set hubble.relay.enabled=false --set hubble.ui.enabled=false` to unblock.
+If pods fail with `failed to find plugin ... in path [/opt/cni/bin]`, verify
+containerd uses `/var/lib/cni/bin` (`grep bin_dirs /etc/containerd/config.toml`),
+fix/restart containerd+kubelet, and recreate stuck pods. Rebuilt images include
+this containerd CNI path fix for containerd 2.x.
 
 On multi-homed nodes (LAN + Tailscale), set `API_ADDR`/`k8sServiceHost` to the
 reachable LAN API address and verify pod egress/DNS. If needed:
@@ -135,9 +149,10 @@ Access: `sudo kubectl -n kubestellar-console port-forward svc/kc-kubestellar-con
 
 - homelab-0: `k8s-control-plane-init.service` creates `/etc/kubernetes/join-command`;
   `k8s-join-server.service` serves it at `GET http://<control-plane>:6447/join`.
-- homelab-1/2: set `CONTROL_PLANE` (and optional `TOKEN_PORT`) in
-  `/etc/kubernetes/node.env` if needed, then `k8s-worker-join.service` fetches
-  and runs `kubeadm join` (idempotent once joined).
+- homelab-1/2: set `CONTROL_PLANE` (prefer control-plane LAN IP) and optional
+  `TOKEN_PORT`/`JOIN_TOKEN` in `/etc/kubernetes/node.env`, then
+  `k8s-worker-join.service` fetches and runs `kubeadm join` (idempotent once
+  joined, exits if `/etc/kubernetes/kubelet.conf` exists).
 - Hardening knobs (opt-in, runtime files): set `JOIN_TOKEN` in
   `/etc/kubernetes/join-server.env` (control-plane) and provide the same value to
   workers via `/etc/kubernetes/join-server.token` or `JOIN_TOKEN` in
@@ -145,10 +160,20 @@ Access: `sudo kubectl -n kubestellar-console port-forward svc/kc-kubestellar-con
   `/etc/kubernetes/join-server.env` to bind a specific interface/IP.
 - `6447/tcp` is opened by default only on node 0 image builds, but treat it as
   sensitive: restrict source to known workers (zone/rich rule) and keep join
-  tokens/`/etc/kubernetes/join-command` protected (0600).
+  tokens/`/etc/kubernetes/join-command` protected (0600). `k8s-approve-node-csrs.timer`
+  auto-approves kubelet client CSRs only for `system:node:homelab-0|1|2` (or
+  `/etc/kubernetes/csr-allowed-nodes`).
+- Pre-join checks from worker: `curl -sv --max-time 5 http://<CONTROL_PLANE>:6447/join`
+  and reachability to `<CONTROL_PLANE>:6443`. If join fails with bootstrap/token
+  or `cluster-info`/`kubeadm-config` errors, regenerate on homelab-0:
+  `kubeadm init phase upload-config all --kubeconfig=/etc/kubernetes/admin.conf`,
+  `kubeadm init phase bootstrap-token --kubeconfig=/etc/kubernetes/admin.conf`,
+  then `kubeadm token create --print-join-command --kubeconfig=/etc/kubernetes/admin.conf | sudo tee /etc/kubernetes/join-command`.
 - If a worker must rejoin, reset its Kubernetes state (`kubeadm reset -f`,
-  remove `/etc/kubernetes/*`, `/var/lib/kubelet`, CNI state as appropriate) and
-  let the join service run again, or re-image.
+  remove `/etc/kubernetes/*` except intended node env/token, `/var/lib/kubelet`,
+  CNI state as appropriate) and let the join service run again, or re-image.
+  Keep node clocks in sync (NTP). After join, nodes become `Ready` once Cilium
+  agents are running.
 
 ## Backups and reset
 

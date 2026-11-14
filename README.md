@@ -42,12 +42,18 @@ join command, Tailscale auth key, etc.) lives on-node under `/etc/kubernetes`,
   `kubeadm init` (if `/etc/kubernetes/admin.conf` is absent), writes a worker
   join command to `/etc/kubernetes/join-command`, and serves it via
   `k8s-join-server.service` (`GET http://<control-plane>:6447/join`).
-- `homelab-1/2` read `/etc/kubernetes/node.env` (`CONTROL_PLANE`, `TOKEN_PORT`)
-  and run `k8s-worker-join.service` to fetch and execute the join command (if
-  `/etc/kubernetes/kubelet.conf` is absent). Default control plane is
-  `homelab-0.local`; set `CONTROL_PLANE` to a static IP if mDNS is unreliable.
-- The join endpoint is unauthenticated plain HTTP; restrict 6447/tcp to worker
-  addresses on untrusted networks.
+- `homelab-1/2` read `/etc/kubernetes/node.env` (`CONTROL_PLANE`, `TOKEN_PORT`,
+  optional `JOIN_TOKEN`) and run `k8s-worker-join.service` to fetch and execute
+  the join command (if `/etc/kubernetes/kubelet.conf` is absent). Default
+  control plane is `homelab-0.local`; prefer a static IP for `CONTROL_PLANE`.
+- `6447/tcp` is opened on node 0 image builds only. Optional hardening (runtime):
+  set `JOIN_TOKEN` in `/etc/kubernetes/join-server.env` (and optionally
+  `JOIN_BIND_ADDR`) on homelab-0 and provide the same token to workers via
+  `/etc/kubernetes/join-server.token` or `JOIN_TOKEN` in `node.env`; restrict
+  `6447/tcp` to known worker sources.
+- `k8s-approve-node-csrs.timer` on homelab-0 auto-approves pending kubelet client
+  CSRs for `system:node:homelab-0|1|2` (or names in
+  `/etc/kubernetes/csr-allowed-nodes`). Keep node time in sync (NTP) on all nodes.
 
 ### Storage and platform add-ons
 

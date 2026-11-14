@@ -20,6 +20,8 @@ if [[ -t 0 && -t 1 ]]; then
   tty_args=(-t)
 fi
 
+container_user="${USER:-$(id -un 2>/dev/null || echo linuxbrew)}"
+
 run_args=(
   --rm -i "${tty_args[@]}"
   --pull=newer
@@ -27,6 +29,8 @@ run_args=(
   -e HOMEBREW_NO_AUTO_UPDATE=1
   -e HOMEBREW_NO_ANALYTICS=1
   -e HOME=/home/linuxbrew
+  -e USER="$container_user"
+  -e LOGNAME="$container_user"
   -e PATH=/home/linuxbrew/.linuxbrew/bin:/home/linuxbrew/.linuxbrew/sbin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
   -v "$PREFIX:/home/linuxbrew/.linuxbrew"
   -v "$STATE:/home/linuxbrew/.cache"
