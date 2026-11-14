@@ -2,7 +2,7 @@
 
 set ${CI:+-x} -euo pipefail
 
-dnf5 -y install 'dnf-command(versionlock)'
+dnf5 -y install 'dnf5-command(versionlock)'
 
 KERNEL_NAME="kernel"
 

@@ -1,0 +1,3 @@
+#!/usr/bin/env bash
+# Stub: image-based/bootc systems handle updates outside SteamOS updater flow.
+exit 0

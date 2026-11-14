@@ -1,0 +1,3 @@
+#!/usr/bin/env bash
+# Stub: timezone managed by system settings.
+exit 0

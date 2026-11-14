@@ -1,0 +1,30 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Basic Gamescope -> Steam (Gaming Mode) session for GDM/Wayland login.
+# Runs Steam Big Picture inside a Gamescope compositor. Customize via env/args.
+
+export XDG_SESSION_TYPE=wayland
+export STEAM_USE_DYNAMIC_VRS=1
+export ENABLE_GAMESCOPE_WSI=1
+
+GAMESCOPE_ARGS_DEFAULT=(-f -e --)
+STEAM_ARGS_DEFAULT=(-gamepadui -steamos3)
+
+# Allow overrides: GAMESCOPE_ARGS="..." STEAM_ARGS="..." gamescope-session
+# Example: GAMESCOPE_ARGS="-f -e" STEAM_ARGS="-gamepadui -steamos3" gamescope-session
+if [[ -n "${GAMESCOPE_ARGS:-}" ]]; then
+    # shellcheck disable=SC2206
+    GAMESCOPE_ARGS_ARR=(${GAMESCOPE_ARGS})
+else
+    GAMESCOPE_ARGS_ARR=(-f -e)
+fi
+
+if [[ -n "${STEAM_ARGS:-}" ]]; then
+    # shellcheck disable=SC2206
+    STEAM_ARGS_ARR=(${STEAM_ARGS})
+else
+    STEAM_ARGS_ARR=("${STEAM_ARGS_DEFAULT[@]}")
+fi
+
+exec gamescope "${GAMESCOPE_ARGS_ARR[@]}" -- steam "${STEAM_ARGS_ARR[@]}"

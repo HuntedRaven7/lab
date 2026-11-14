@@ -27,6 +27,34 @@ check:
     done
     echo "Checking syntax: Justfile"
     just --unstable --fmt --check -f Justfile
+    just check-flatpak-remotes
+
+# Verify pinned Flatpak remote .flatpakrepo file hashes still match upstream
+[group('Utility')]
+check-flatpak-remotes:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    file="build_files/build-workstation.sh"
+    check_remote() {
+        local name="$1" url="$2"
+        local expected actual
+        expected="$(grep -E "^${name}=" "$file" | head -n1 | sed -E 's/^[^=]+=([0-9a-f]+).*/\1/')"
+        if [[ -z "$expected" ]]; then
+            echo "ERROR: could not find ${name} in ${file}" >&2
+            return 1
+        fi
+        actual="$(curl -fsSL "$url" | sha256sum | awk '{print $1}')"
+        if [[ "$expected" != "$actual" ]]; then
+            echo "ERROR: ${name} mismatch for ${url}" >&2
+            echo "  expected: ${expected}" >&2
+            echo "  actual:   ${actual}" >&2
+            echo "  update ${file} with the new hash if this change is intentional" >&2
+            return 1
+        fi
+        echo "OK: ${name} matches ${url}"
+    }
+    check_remote FLATHUB_REPO_SHA256 "https://dl.flathub.org/repo/flathub.flatpakrepo"
+    check_remote FLATPARK_REPO_SHA256 "https://dl.flatpark.org/flatpark.flatpakrepo"
 
 # Fix Just Syntax
 [group('Just')]

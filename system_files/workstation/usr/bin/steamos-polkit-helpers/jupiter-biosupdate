@@ -1,0 +1,3 @@
+#!/usr/bin/env bash
+# Stub: no Steam Deck/Jupiter BIOS update flow on this system.
+exit 0
